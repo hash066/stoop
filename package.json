@@ -1,0 +1,19 @@
+{
+  "name": "stoop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Sell anything without meeting anyone. Money moves only when your doorbell sees it go.",
+  "type": "module",
+  "packageManager": "pnpm@11.0.8",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "build": "pnpm -r --if-present build"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

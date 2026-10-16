@@ -1,0 +1,9 @@
+packages:
+  - "packages/*"
+  - "services/*"
+  - "apps/*"
+  - "tools/*"
+  - "evals"
+  - "infra"
+allowBuilds:
+  esbuild: true
