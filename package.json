@@ -17,7 +17,9 @@
     "build": "pnpm -r --if-present build",
     "eval:redteam": "pnpm --filter @stoop/evals redteam",
     "eval:poh": "pnpm --filter @stoop/evals poh",
-    "ring-sim": "pnpm --silent --filter @stoop/ring-sim start"
+    "ring-sim": "pnpm --silent --filter @stoop/ring-sim start",
+    "qa": "node tools/record-demo/qa.mjs",
+    "record": "node tools/record-demo/record-demo.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

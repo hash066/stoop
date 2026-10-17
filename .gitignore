@@ -13,3 +13,7 @@ fixtures/footage/raw/
 __pycache__/
 .data/
 
+
+# browser tool outputs (UI QA screenshots, demo recordings)
+tools/record-demo/clips/
+tools/record-demo/qa-shots/

@@ -81,4 +81,20 @@ button { font: inherit; cursor: pointer; }
 .decisions .allow .stamp { color: var(--ok); } .decisions .deny .stamp { color: var(--bad); } .decisions .needs_approval .stamp { color: var(--amber); }
 .rpc li { padding: 4px 0; border-top: 1px solid var(--rule); font-family: var(--mono); word-break: break-word; }
 .rpc li.in { color: var(--muted); }
-@media (max-width: 900px) { .stage { grid-template-columns: 1fr; } .device { aspect-ratio: auto; min-height: 90vh; } .dev { display: none; } }
+@media (max-width: 900px) {
+  .stage { grid-template-columns: 1fr; }
+  /* min-width:0 lets the device shrink to the viewport instead of being forced wide by nowrap footer controls */
+  .device { aspect-ratio: auto; min-height: 90vh; min-width: 0; max-width: 100%; }
+  .voice, .cards, .cardbox { min-width: 0; }
+  .dev { display: none; }
+}
+@media (max-width: 560px) {
+  .page { padding: 8px; }
+  .device { border-width: 8px; border-radius: 16px; }
+  .topline { flex-wrap: wrap; row-gap: 4px; padding: 10px 16px 0; }
+  .stage { padding: 12px 16px; gap: 14px; }
+  /* footer wraps: input takes its own row, the ghost buttons sit below it */
+  .controls { flex-wrap: wrap; gap: 8px; padding: 10px 16px 14px; }
+  .typebox { flex: 1 1 100%; }
+  .micbtn { width: 48px; height: 48px; }
+}

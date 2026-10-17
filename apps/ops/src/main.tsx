@@ -175,7 +175,10 @@ function App() {
               <div className="frames">
                 {(["before", "after"] as const).map((k) => (
                   <figure key={k}>
-                    <img src={`${STACK}/ops/frame/${deal.id}/${k}?t=${evidence?.[k]?.at ?? 0}`} alt={`${k} frame`} onError={(e) => ((e.target as HTMLImageElement).style.visibility = "hidden")} onLoad={(e) => ((e.target as HTMLImageElement).style.visibility = "visible")} />
+                    {/* only request a frame once its evidence exists; before that the route 404s */}
+                    {evidence?.[k] && (
+                      <img src={`${STACK}/ops/frame/${deal.id}/${k}?t=${evidence[k].at}`} alt={`${k} frame`} onError={(e) => ((e.target as HTMLImageElement).style.visibility = "hidden")} onLoad={(e) => ((e.target as HTMLImageElement).style.visibility = "visible")} />
+                    )}
                     <figcaption>
                       {k} · {evidence?.[k] ? `${evidence[k].presence} · ${evidence[k].origin === "our_footage" ? "our footage" : evidence[k].origin}` : "–"}
                     </figcaption>
