@@ -92,6 +92,9 @@ button { font: inherit; cursor: pointer; }
   .page { padding: 8px; }
   .device { border-width: 8px; border-radius: 16px; }
   .topline { flex-wrap: wrap; row-gap: 4px; padding: 10px 16px 0; }
+  /* room + clock on the first row, the simulator label on its own row below */
+  .topline .room { flex: 1; }
+  .topline .sim-label { order: 3; flex-basis: 100%; }
   .stage { padding: 12px 16px; gap: 14px; }
   /* footer wraps: input takes its own row, the ghost buttons sit below it */
   .controls { flex-wrap: wrap; gap: 8px; padding: 10px 16px 14px; }

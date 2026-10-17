@@ -139,9 +139,12 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
       const sellable = out.filter((i) => !i.blocked);
       const total = sellable.reduce((t, i) => t + i.listMinor, 0);
       const blocked = out.find((i) => i.blocked);
-      const speech =
+      // Say "can't be sold" once: skip our lead-in when the recall reason already says it
+      const reasonSaysIt = /can.?t be (re)?sold/i.test(blocked?.blockedReason ?? "");
+      const speech = (
         `I found ${sellable.length} thing${sellable.length === 1 ? "" : "s"} you can sell, worth about ${$(total)} together.` +
-        (blocked ? ` The ${inSentence(blocked.title)} can't be sold. ${blocked.blockedReason} ${blocked.alternative ?? ""}` : "");
+        (blocked ? ` ${reasonSaysIt ? "" : `The ${inSentence(blocked.title)} can't be sold. `}${blocked.blockedReason ?? ""} ${blocked.alternative ?? ""}` : "")
+      ).trim();
       ctx.bus.emit({ type: "appraisal_done", at: ctx.now(), householdId: actor.householdId, totalMinor: total, count: out.length });
       return result(speech, { kind: "appraisal", totalListMinor: total, items: out, unidentified, compsSource, identifier: ctx.appraiser.identifierName }, ctx.cards, "appraisal-grid");
     },

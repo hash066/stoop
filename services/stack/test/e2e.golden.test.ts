@@ -22,7 +22,7 @@ describe("golden path: sweep -> list -> haggle -> approve -> pay -> porch pickup
     const items = sc<{ items: Array<{ title: string; blocked: boolean; listMinor: number }> }>(appraisal).items;
     expect(items.find((i) => /stroller/i.test(i.title))?.listMinor).toBe(120_00);
     expect(items.find((i) => /crib/i.test(i.title))?.blocked).toBe(true);
-    expect(text(appraisal)).toMatch(/can't be sold/);
+    expect(text(appraisal)).toMatch(/can't be (re)?sold/);
     expect(appraisal._meta).toMatchObject({ ui: { resourceUri: expect.stringMatching(/^ui:\/\/stoop\/appraisal-grid@/) } });
 
     // 2. "Sell the stroller and the bike. Don't go below $90 on the stroller."
