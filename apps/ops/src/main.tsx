@@ -56,6 +56,7 @@ function App() {
   const [ringToken, setRingToken] = useState("");
   const [devices, setDevices] = useState<any[]>([]);
   const [ringMsg, setRingMsg] = useState<string>();
+  const [snapshot, setSnapshot] = useState<string>();
   const video = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -93,6 +94,24 @@ function App() {
   const scenario = async (name: string) => {
     const r = await post(`/sim/scenario/${name}`, { dealId: deal?.id });
     setScenarioLog([`▶ ${name}${r.state ? ` → ${r.state}` : ""}`, ...(r.log ?? [r.message ?? JSON.stringify(r)])]);
+  };
+
+  const takeSnapshot = async (deviceId: string) => {
+    setRingMsg("Requesting a snapshot (303 → pre-signed URL)…");
+    const res = await fetch(`${STACK}/ring/snapshot/${encodeURIComponent(deviceId)}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setRingMsg(`Snapshot failed: ${err.message ?? err.error ?? res.status}`);
+      return;
+    }
+    if (snapshot) URL.revokeObjectURL(snapshot);
+    setSnapshot(URL.createObjectURL(await res.blob()));
+    setRingMsg(`Snapshot at ${tm(Date.now())}`);
+  };
+
+  const bindDevice = async (deviceId: string) => {
+    const r = await post("/ring/bind", { deviceId });
+    setRingMsg(r.ok ? `Pickups now use this doorbell (frames: ${r.frameSource === "ring_snapshot" ? "Ring snapshots" : "our footage"})` : `Bind failed: ${r.error}`);
   };
 
   const liveView = async (deviceId: string) => {
@@ -261,10 +280,20 @@ function App() {
           {devices.map((d) => (
             <div key={d.id} className="device">
               <span>{d.name ?? d.id}</span>
-              <button onClick={() => void liveView(d.id)}>Live view</button>
+              <span className="device-actions">
+                <button onClick={() => void takeSnapshot(d.id)}>Snapshot</button>
+                <button onClick={() => void bindDevice(d.id)}>Use for pickups</button>
+                <button onClick={() => void liveView(d.id)}>Live view</button>
+              </span>
             </div>
           ))}
           {ringMsg && <p className="muted small">{ringMsg}</p>}
+          {snapshot && (
+            <figure className="snap">
+              <img src={snapshot} alt="Ring snapshot" />
+              <figcaption>Ring Developer Playground snapshot</figcaption>
+            </figure>
+          )}
           <video ref={video} autoPlay muted playsInline className="live" />
         </section>
       </div>

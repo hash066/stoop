@@ -384,13 +384,39 @@ export async function createStack(cfg: StackConfig) {
     const { answer } = await ringClient.whep(c.req.param("deviceId"), await c.req.text());
     return c.text(answer, 201, { "Content-Type": "application/sdp" });
   });
+  // One real snapshot (303 -> pre-signed URL): proves the Partner API path without needing a deal
+  app.get("/ring/snapshot/:deviceId", async (c) => {
+    if (!ringToken) return c.json({ error: "no_ring_token" }, 409);
+    const deviceId = c.req.param("deviceId");
+    try {
+      const now = Date.now();
+      const s = await ringClient.snapshot(deviceId, { type: "latest_in_range", startTimestamp: now - 10 * 60_000, endTimestamp: now });
+      bus.emit({ type: "ring_snapshot", at: clock.now(), deviceId, bytes: s.bytes.length, mediaTimestamp: s.mediaTimestamp });
+      return new Response(Buffer.from(s.bytes), { headers: { "Content-Type": s.mime, "Cache-Control": "no-store", "X-Frame-Origin": "ring" } });
+    } catch (e) {
+      bus.emit({ type: "ring_api_error", at: clock.now(), error: String(e) });
+      return c.json({ error: "ring_api_error", message: String(e) }, 502);
+    }
+  });
+  // Bind a real Ring device to the demo household: its webhooks (and simulator events) then match
+  // this porch, and with FRAME_SOURCE=ring the before/after frames are real snapshots.
+  app.post("/ring/bind", async (c) => {
+    const { deviceId } = (await c.req.json()) as { deviceId?: string };
+    if (!deviceId) return c.json({ error: "deviceId is required" }, 400);
+    await settlement.setHouseholdDevice(DEMO.household.id, deviceId);
+    bus.emit({ type: "ring_device_bound", at: clock.now(), deviceId, frameSource: frames.name });
+    return c.json({ ok: true, deviceId, frameSource: frames.name });
+  });
 
   // ---------- simulator (local only, every event labelled "simulator")
   const sim = new Hono();
   let reqN = 0;
+  // The demo porch's device: the simulator id, or a real Ring device after /ring/bind
+  const porchDevice = async () => (await settlement.householdPublic(DEMO.household.id).catch(() => undefined))?.ringDeviceId ?? DEMO.ringDeviceId;
   const postRing = async (type: "motion_detected" | "button_press", subType?: string, opts: { badSignature?: boolean; staleMs?: number; requestId?: string } = {}) => {
     const at = clock.now() - (opts.staleMs ?? 0);
-    const body = JSON.stringify(buildEnvelope({ type, deviceId: DEMO.ringDeviceId, at, subType, requestId: opts.requestId ?? `sim_${Date.now()}_${++reqN}` }));
+    const deviceId = await porchDevice();
+    const body = JSON.stringify(buildEnvelope({ type, deviceId, at, subType, requestId: opts.requestId ?? `sim_${Date.now()}_${++reqN}` }));
     const res = await app.request("/ring/webhook", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Signature": opts.badSignature ? "sha256=0000" : signBody(body, simulatorKey) },
@@ -401,7 +427,7 @@ export async function createStack(cfg: StackConfig) {
   };
   sim.post("/scene", async (c) => {
     const { scene } = (await c.req.json()) as { scene: Scene };
-    footage.setScene(DEMO.ringDeviceId, scene);
+    footage.setScene(await porchDevice(), scene);
     bus.emit({ type: "sim_scene", at: clock.now(), scene, label: "simulator" });
     return c.json({ ok: true, scene });
   });
@@ -446,27 +472,27 @@ export async function createStack(cfg: StackConfig) {
     switch (name) {
       case "golden":
         await ensurePass();
-        footage.setScene(DEMO.ringDeviceId, "item_present");
+        footage.setScene(await porchDevice(), "item_present");
         await capture("before");
         log.push("before frame: item present");
         await settlement.checkIn(passId, dev);
         log.push("buyer tapped I'm here");
         log.push(`doorbell press -> ${(await postRing("button_press")).status}`);
-        footage.setScene(DEMO.ringDeviceId, "item_absent");
+        footage.setScene(await porchDevice(), "item_absent");
         await capture("after");
         log.push(`after frame: item gone -> ${(await settlement.getDeal(deal.id)).state}`);
         break;
       case "piracy":
-        footage.setScene(DEMO.ringDeviceId, "item_present");
+        footage.setScene(await porchDevice(), "item_present");
         await capture("before");
         log.push(`stranger at the door -> ${(await postRing("motion_detected", "human")).status}`);
-        footage.setScene(DEMO.ringDeviceId, "item_absent");
+        footage.setScene(await porchDevice(), "item_absent");
         await capture("after");
         log.push(`item gone without a pass -> ${(await settlement.getDeal(deal.id)).state}`);
         break;
       case "still_there":
         await ensurePass();
-        footage.setScene(DEMO.ringDeviceId, "item_present");
+        footage.setScene(await porchDevice(), "item_present");
         await capture("before");
         await settlement.checkIn(passId, dev);
         await postRing("motion_detected", "human");
@@ -479,7 +505,7 @@ export async function createStack(cfg: StackConfig) {
         break;
       case "camera_offline":
         await ensurePass();
-        footage.setScene(DEMO.ringDeviceId, "offline");
+        footage.setScene(await porchDevice(), "offline");
         await settlement.checkIn(passId, dev);
         await capture("after");
         log.push(`camera offline -> ${(await settlement.getDeal(deal.id)).state}`);

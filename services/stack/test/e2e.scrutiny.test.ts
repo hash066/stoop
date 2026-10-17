@@ -1,7 +1,7 @@
 // Scrutiny path, end to end (plan §12.2): protocol hardening, Alexa-style clients, policy limits,
 // and the handoff failure scenarios through the same endpoints the Ops scenario buttons use.
 import { describe, expect, it } from "vitest";
-import type { Stack } from "../src/index.ts";
+import { DEMO, type Stack } from "../src/index.ts";
 import { appFetch, BASE, bootStack, DANA, http, LEE, mcpClient, sc, SELLER, text, waitFor } from "./harness.ts";
 
 const MCP_HEADERS = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
@@ -149,6 +149,24 @@ describe("handoff scenarios (Ops buttons)", () => {
     const r = await http(stack, "POST", "/sim/scenario/golden", { dealId });
     expect(r.json.state).toBe("INSPECTION");
     expect(r.json.log.join(" ")).toMatch(/doorbell press -> 200/);
+  });
+
+  it("a bound Ring device: simulator events and scenes follow it, golden still verifies", async () => {
+    const stack = await bootStack();
+    const deviceId = "ava1.ring.device.TEST0001";
+    const bound = await http(stack, "POST", "/ring/bind", { deviceId });
+    expect(bound.json).toMatchObject({ ok: true, deviceId, frameSource: "our_footage" });
+    expect((await stack.settlement.householdPublic(DEMO.household.id)).ringDeviceId).toBe(deviceId);
+    const { dealId } = await dealAtWindow(stack);
+    const r = await http(stack, "POST", "/sim/scenario/golden", { dealId });
+    expect(r.json.state).toBe("INSPECTION");
+    expect(r.json.log.join(" ")).toMatch(/doorbell press -> 200/);
+  });
+
+  it("Ring routes refuse without a token or a device id", async () => {
+    const stack = await bootStack();
+    expect((await http(stack, "GET", "/ring/snapshot/ava1.ring.device.X")).status).toBe(409);
+    expect((await http(stack, "POST", "/ring/bind", {})).status).toBe(400);
   });
 
   it("X7 piracy: stranger takes it, no pass -> hold voided, never captured", async () => {
