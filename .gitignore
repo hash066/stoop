@@ -17,3 +17,6 @@ __pycache__/
 # browser tool outputs (UI QA screenshots, demo recordings)
 tools/record-demo/clips/
 tools/record-demo/qa-shots/
+
+# CDK deploy outputs (resource ARNs for this account)
+infra/outputs.json

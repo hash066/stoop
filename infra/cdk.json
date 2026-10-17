@@ -1,0 +1,6 @@
+{
+  "app": "npx tsx bin/stoop.ts",
+  "context": {
+    "@aws-cdk/aws-kms:reduceCrossAccountRegionPolicyScope": true
+  }
+}
