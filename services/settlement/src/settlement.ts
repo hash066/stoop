@@ -47,6 +47,9 @@ export const RESERVATION_TTL_MS = 15 * 60 * 1000;
 export const APPROVAL_TTL_MS = 15 * 60 * 1000;
 export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_WINDOW_MS = 15 * 60 * 1000;
+/** R11/X2: buyer offers per negotiation per minute. People never get near this; scripts do. */
+export const OFFER_RATE_MAX = 8;
+export const OFFER_RATE_WINDOW_MS = 60 * 1000;
 export const AFTER_FRAME_DELAY_MS = 45 * 1000;
 export const HOLD_RENEW_MARGIN_MS = 12 * 60 * 60 * 1000;
 
@@ -478,7 +481,16 @@ export class Settlement {
     return n;
   }
 
+  /** R11/X2: false once a buyer has sent OFFER_RATE_MAX offers on this thread in the last minute. */
+  async offerAllowed(negotiationId: string) {
+    const n = await this.getNegotiation(negotiationId);
+    const since = this.now() - OFFER_RATE_WINDOW_MS;
+    return n.offers.filter((o) => o.by === "buyer" && o.at > since).length < OFFER_RATE_MAX;
+  }
+
   async recordOffer(negotiationId: string, by: "buyer" | "seller", amountMinor: number, message: string) {
+    if (by === "buyer" && !(await this.offerAllowed(negotiationId)))
+      throw new SettlementError("rate_limited", "Too many offers. Try again in a minute.", 429);
     const n = await this.getNegotiation(negotiationId);
     n.offers.push({ by, amountMinor, at: this.now(), message });
     if (by === "seller") n.lastCounterMinor = amountMinor;

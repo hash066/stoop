@@ -16,7 +16,8 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "build": "pnpm -r --if-present build",
     "eval:redteam": "pnpm --filter @stoop/evals redteam",
-    "eval:poh": "pnpm --filter @stoop/evals poh"
+    "eval:poh": "pnpm --filter @stoop/evals poh",
+    "ring-sim": "pnpm --silent --filter @stoop/ring-sim start"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

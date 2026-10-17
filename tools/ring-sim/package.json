@@ -1,0 +1,27 @@
+{
+  "name": "@stoop/ring-sim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sends Ring Partner API v1.1-shaped webhooks, signed with OUR simulator key (never Ring's), to a Stoop deployment.",
+  "exports": {
+    ".": "./src/sim.ts"
+  },
+  "bin": {
+    "ring-sim": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@stoop/ring-bridge": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  }
+}

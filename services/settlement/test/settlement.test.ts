@@ -157,6 +157,17 @@ describe("approvals and policy", () => {
     expect(r.blocked).toBe(true);
     await expect(st.s.openNegotiation(listing.id, st.buyer.id)).rejects.toThrow(/buyer_blocked/);
   });
+
+  it("more than 8 buyer offers a minute are refused; the window slides (X2)", async () => {
+    const st = await makeStack();
+    const { listing } = await liveListing(st, { floorMinor: 90_00 });
+    const n = await st.s.openNegotiation(listing.id, st.buyer.id);
+    for (let i = 0; i < 8; i++) await st.s.recordOffer(n.id, "buyer", 50_00 + i, "");
+    await expect(st.s.recordOffer(n.id, "buyer", 70_00, "")).rejects.toThrow(/rate_limited/);
+    await st.s.recordOffer(n.id, "seller", 115_00, ""); // the seller side is never limited
+    await st.tick(61_000);
+    expect(await st.s.offerAllowed(n.id)).toBe(true);
+  });
 });
 
 describe("checkout (R13)", () => {

@@ -8,6 +8,7 @@ const STATUS: Record<string, [string, string]> = {
   refused: ["Refused by policy", "bad"],
   blocked: ["Blocked", "bad"],
   answered: ["Answered", "amber"],
+  rate_limited: ["Slow down", "amber"],
 };
 
 mountCard("negotiation-live", (data: { title?: string; askMinor?: number; action?: string; reply?: string; ladder?: Array<{ by: string; amountMinor: number }> }, { root }) => {

@@ -20,9 +20,11 @@ export interface NegotiationPort {
   checkOutgoing(listingId: string, text: string): Promise<{ ok: boolean; violations: string[] }>;
   strike(negotiationId: string, signal: string): Promise<{ strikes: number; blocked: boolean }>;
   noteRefusal(negotiationId: string, signal: string): Promise<unknown>;
+  /** R11/X2 offer rate limit; optional so lightweight test ports can omit it. */
+  offerAllowed?(negotiationId: string): Promise<boolean>;
 }
 
-export type NegotiatorAction = "counter" | "awaiting_seller" | "accepted" | "declined" | "answered" | "refused" | "blocked";
+export type NegotiatorAction = "counter" | "awaiting_seller" | "accepted" | "declined" | "answered" | "refused" | "blocked" | "rate_limited";
 
 export interface NegotiatorResult {
   action: NegotiatorAction;
@@ -51,6 +53,8 @@ export function parseMoneyMinor(text: string): number | undefined {
   const v = Math.round(Number(m[1]) * 100);
   return v > 0 ? v : undefined;
 }
+
+export const RATE_LIMITED_REPLY = "You are sending offers faster than the seller can read them. Give it a minute, then send your best one.";
 
 const REFUSALS: Record<ScamSignal, string> = {
   off_platform_payment: "Payment only goes through Stoop, so your money is protected until pickup. I can't take Zelle, Venmo, wire or crypto.",
@@ -119,6 +123,8 @@ export class Negotiator {
       guardBlocks: number;
     } = { guardBlocks: 0 };
     const offerFromText = input.offerMinor ?? parseMoneyMinor(input.buyerText);
+    if (offerFromText !== undefined && this.port.offerAllowed && !(await this.port.offerAllowed(n.id)))
+      return { action: "rate_limited", reply: disclose(RATE_LIMITED_REPLY), signals, usedFallback: false, guardBlocks: 0 };
 
     const evaluateOffer = tool({
       name: "evaluate_offer",

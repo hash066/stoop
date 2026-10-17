@@ -21,6 +21,7 @@ const stack = await createStack({
   persistKeys: true,
   frameSource: process.env.FRAME_SOURCE === "ring" ? "ring" : "footage",
   ringHmacKey: process.env.RING_WEBHOOK_HMAC_KEY,
+  simulatorKey: process.env.RING_SIMULATOR_KEY || undefined,
 });
 
 serve({ fetch: stack.app.fetch, port, hostname: "127.0.0.1" }, () => {
