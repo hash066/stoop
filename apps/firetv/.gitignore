@@ -18,7 +18,16 @@ web-build/
 # Package managers
 package-lock.json
 yarn-error.log
-.yarn/cache
+*.log
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Build / verification output
+.web-export-check/
+.expo-shared/
 
 # macOS
 .DS_Store

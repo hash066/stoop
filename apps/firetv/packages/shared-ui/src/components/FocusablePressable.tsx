@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   PressableProps,
+  StyleProp,
   ViewStyle,
 } from "react-native";
 import { scaledPixels } from "../hooks/useScale";
@@ -13,7 +14,7 @@ import { colors } from "../theme/colors";
 interface CustomPressableProps extends PressableProps {
   text: string;
   onSelect: () => void;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 const FocusablePressable = React.memo(({

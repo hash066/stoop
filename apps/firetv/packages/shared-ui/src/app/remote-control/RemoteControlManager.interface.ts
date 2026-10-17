@@ -4,7 +4,8 @@ import { SupportedKeys } from './SupportedKeys';
 export type KeydownListener = (event: SupportedKeys) => void;
 
 export interface RemoteControlManagerInterface {
-  addKeydownListener(listener: KeydownListener): () => void;
+  // Returns the listener so react-tv-space-navigation's remoteControlUnsubscriber can detach it.
+  addKeydownListener(listener: KeydownListener): KeydownListener;
   removeKeydownListener(listener: KeydownListener): void;
   emitKeyDown(key: SupportedKeys): void;
 }

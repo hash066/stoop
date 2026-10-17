@@ -50,14 +50,14 @@
       ],
       "./plugins/withFmtXcode26Fix"
     ],
-    "name": "MultiTVSample",
-    "slug": "MultiTVSample",
-    "scheme": "com.anonymous.MultiTVSample",
+    "name": "Stoop Garage",
+    "slug": "stoop-garage",
+    "scheme": "com.stoop.garage",
     "android": {
-      "package": "com.anonymous.MultiTVSample"
+      "package": "com.stoop.garage"
     },
     "ios": {
-      "bundleIdentifier": "com.anonymous.MultiTVSample"
+      "bundleIdentifier": "com.stoop.garage"
     },
     "newArchEnabled": false
   }

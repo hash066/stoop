@@ -13,6 +13,10 @@ SpatialNavigation.configureRemoteControl({
       [SupportedKeys.Down]: Directions.DOWN,
       [SupportedKeys.Enter]: Directions.ENTER,
       [SupportedKeys.Back]: null,
+      // Garage Mode has no media transport; media keys are inert.
+      [SupportedKeys.PlayPause]: null,
+      [SupportedKeys.FastForward]: null,
+      [SupportedKeys.Rewind]: null,
     };
 
     const remoteControlListener = (keyEvent: SupportedKeys) => {
