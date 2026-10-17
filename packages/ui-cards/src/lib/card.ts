@@ -35,6 +35,9 @@ export function mountCard(name: string, render: Render) {
       root.append(h("p", { class: "muted" }, "This card couldn't render."));
       console.error(e);
     }
+    // autoResize debounces on requestAnimationFrame, which never fires in hidden/background
+    // hosts; report the height explicitly too so the host can size the frame immediately.
+    setTimeout(() => void app.sendSizeChanged({ height: Math.ceil(document.documentElement.scrollHeight) }), 0);
   };
   app.onhostcontextchanged = (ctx) => {
     if (ctx.theme) document.documentElement.dataset.theme = ctx.theme;
