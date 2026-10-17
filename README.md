@@ -11,6 +11,8 @@ Stoop is an **Alexa+ add-on** (MCP server + MCP Apps cards) and a **Ring Appstor
 
 **The AI never holds the keys.** Money, your address and receipts are controlled by a separate Settlement service under deterministic rules. In a 300-attack red team the selling agent leaked the address **0 times**, because it never had it.
 
+![Stoop architecture](docs/architecture.png)
+
 ## Run it (Windows, macOS or Linux; Node 22)
 
 ```bash

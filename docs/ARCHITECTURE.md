@@ -14,12 +14,16 @@ It does so only under deterministic rules in `packages/policy`, and usually only
 
 | Guarantee | How it's enforced |
 |---|---|
-| Address never leaks through an agent | The address is encrypted in Settlement's vault (KMS in AWS, decrypt grant only to Settlement). It's revealed only to the paying buyer's device-bound pass, inside the window (R2). Outbound agent text is also checked against address fragments |
+| Address never leaks through an agent | The address is encrypted under a KMS key whose policy lets **only the Vault Lambda** decrypt: not the MCP host, not the agents, not even the account root user. All address plaintext lives behind one interface, the address boundary (`services/settlement/src/boundary.ts`): it checks outbound agent text against address fragments and reveals the address only to the paying buyer's device-bound pass inside the window (R2), re-deriving the R2 inputs from the store itself |
 | The floor price is never disclosed | Negotiator agents see oracle answers only: `acceptable?` and `suggested counter`. Counters are floor-shielded and monotone (R5) |
 | No payment without proof | Capture requires a VERIFIED Proof-of-Handoff plus buyer "Got it" or a 2-hour inspection; or dual confirmation (≤ $150); or a dispute verdict (R3) |
 | A "yes" can't be replayed or bent | Capability tokens are MAC'd (KMS GenerateMac in AWS), expire in 5 minutes, are single-use, and are bound to `termsHash` = SHA-256 over the RFC 8785 canonical terms shown (R4) |
 
 ## Components
+
+![Stoop architecture](architecture.png)
+
+Solid boxes run today; dashed boxes are the AWS deployment defined in `infra/` (CDK). The diagram source is [`architecture.svg`](architecture.svg); `node tools/record-demo/diagram.mjs` re-renders the PNG.
 
 ```mermaid
 flowchart LR

@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="t d">
+  <title id="t">Stoop architecture</title>
+  <desc id="d">Simulated Alexa+ devices and other MCP clients talk to the Stoop MCP server. Strands agents on Amazon Bedrock only propose; Settlement, under the Policy Kernel, is the only component that moves money. Ring doorbell evidence feeds the Proof-of-Handoff truth table. KMS holds the keys; only the Vault Lambda can decrypt an address.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1f1d1a"/></marker>
+    <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#c97a1a"/></marker>
+    <style>
+      .bg { fill: #f4efe4; }
+      .box { fill: #fbf8f1; stroke: #1f1d1a; stroke-width: 1; }
+      .dash { fill: #fbf8f1; stroke: #1f1d1a; stroke-width: 1; stroke-dasharray: 6 4; }
+      .zone { fill: none; stroke: #6d665b; stroke-width: 1; stroke-dasharray: 6 4; }
+      .trust { fill: #fbf8f1; stroke: #c97a1a; stroke-width: 2; }
+      .rule { stroke: #d6cdbb; stroke-width: 1; }
+      .ln { fill: none; stroke: #1f1d1a; stroke-width: 1.2; marker-end: url(#a); }
+      .lna { fill: none; stroke: #c97a1a; stroke-width: 1.6; marker-end: url(#aa); }
+      .h1 { font: 600 32px Fraunces, Georgia, serif; fill: #1f1d1a; }
+      .h2 { font: 600 19px Fraunces, Georgia, serif; fill: #1f1d1a; }
+      .t { font: 400 13.5px "IBM Plex Sans", system-ui, sans-serif; fill: #1f1d1a; }
+      .m { font: 400 12px "IBM Plex Mono", ui-monospace, monospace; fill: #6d665b; }
+      .ms { font: 400 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: #6d665b; }
+      .col { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; fill: #6d665b; letter-spacing: .08em; }
+      .amb { fill: #c97a1a; }
+      .tag { font: 500 10px "IBM Plex Mono", ui-monospace, monospace; fill: #9b2c1f; letter-spacing: .06em; }
+      .tagbox { fill: none; stroke: #9b2c1f; stroke-width: 1; }
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/>
+
+  <text class="h1" x="40" y="62">Stoop · architecture</text>
+  <text class="m" x="40" y="92">The AI only proposes. Settlement moves the money, KMS holds the keys, the doorbell provides the proof.</text>
+
+  <text class="col" x="40" y="124">DEVICES</text>
+  <text class="col" x="380" y="124">STOOP HOST</text>
+  <text class="col" x="800" y="124">SETTLEMENT · THE ONLY ONE THAT MOVES MONEY</text>
+  <text class="col" x="1200" y="124">AWS · infra/ (CDK StoopStack)</text>
+
+  <!-- Column A: devices -->
+  <rect class="box" x="40" y="136" width="270" height="80"/>
+  <text class="h2" x="54" y="162">Seller's kitchen</text>
+  <text class="t" x="54" y="184">Alexa+ device: MCP client</text>
+  <text class="t" x="54" y="202">+ MCP Apps host</text>
+  <rect class="tagbox" x="222" y="146" width="78" height="16"/><text class="tag" x="227" y="158">SIMULATED</text>
+
+  <rect class="box" x="40" y="232" width="270" height="64"/>
+  <text class="h2" x="54" y="258">Buyer's living room</text>
+  <text class="t" x="54" y="280">Alexa+ device: MCP client</text>
+  <rect class="tagbox" x="226" y="268" width="78" height="16"/><text class="tag" x="231" y="280">SIMULATED</text>
+
+  <rect class="box" x="40" y="312" width="270" height="64"/>
+  <text class="h2" x="54" y="338">Any AI shopping agent</text>
+  <text class="t" x="54" y="360">MCP + UCP checkout</text>
+
+  <rect class="box" x="40" y="392" width="270" height="64"/>
+  <text class="h2" x="54" y="418">Fire TV Garage Mode</text>
+  <text class="t" x="54" y="440">D-pad MCP client</text>
+
+  <rect class="box" x="40" y="640" width="270" height="64"/>
+  <text class="h2" x="54" y="666">Pickup pass</text>
+  <text class="t" x="54" y="688">buyer's phone · device-bound</text>
+
+  <rect class="box" x="40" y="740" width="270" height="64"/>
+  <text class="h2" x="54" y="766">Ring doorbell</text>
+  <text class="t" x="54" y="788">porch camera + button</text>
+
+  <!-- Column B: host -->
+  <rect class="box" x="380" y="136" width="340" height="320"/>
+  <text class="h2" x="396" y="164">MCP server</text>
+  <text class="m" x="396" y="186">/mcp/seller · /mcp/buyer</text>
+  <line class="rule" x1="396" y1="200" x2="704" y2="200"/>
+  <text class="t" x="396" y="222">Streamable HTTP, spec 2025-11-25</text>
+  <text class="t" x="396" y="244">sessions + stateless clients</text>
+  <line class="rule" x1="396" y1="258" x2="704" y2="258"/>
+  <text class="t" x="396" y="280">elicitation: form + URL mode</text>
+  <text class="t" x="396" y="302">MCP Apps cards (glanceable)</text>
+  <line class="rule" x1="396" y1="316" x2="704" y2="316"/>
+  <text class="t" x="396" y="338">Tasks: watch_handoff follows a sale</text>
+  <text class="t" x="396" y="360">UCP checkout sessions (REST)</text>
+  <line class="rule" x1="396" y1="374" x2="704" y2="374"/>
+  <text class="t" x="396" y="396">approvals → single-use capability</text>
+  <text class="t" x="396" y="418">tokens bound to the exact terms</text>
+  <text class="m" x="396" y="442">Agent Skill: skills/stoop/SKILL.md</text>
+
+  <rect class="zone" x="370" y="476" width="360" height="108"/>
+  <text class="ms" x="380" y="492">AgentCore Runtime + Observability · deploying</text>
+  <rect class="box" x="380" y="500" width="340" height="76"/>
+  <text class="h2" x="396" y="526">Strands agents</text>
+  <text class="t" x="396" y="547">Negotiator: evaluate_offer → send_reply</text>
+  <text class="t" x="396" y="566">Appraiser (recall block) · BuyerBot</text>
+
+  <rect class="box" x="380" y="604" width="340" height="56"/>
+  <text class="h2" x="396" y="628">Amazon Bedrock</text>
+  <text class="t" x="396" y="649">Nova 2 Lite: planner, negotiation, vision</text>
+
+  <rect class="box" x="380" y="720" width="340" height="100"/>
+  <text class="h2" x="396" y="746">Ring bridge + Verifier</text>
+  <text class="t" x="396" y="768">HMAC webhooks · snapshot 303 · WHEP</text>
+  <text class="t" x="396" y="788">vision: present / absent / unsure</text>
+  <text class="m" x="396" y="809">no faces, no identity inference</text>
+
+  <!-- Column C: settlement -->
+  <rect class="trust" x="800" y="136" width="330" height="320"/>
+  <text class="h2" x="816" y="164">Settlement</text>
+  <text class="m" x="816" y="186">own role · deterministic rules</text>
+  <line class="rule" x1="816" y1="200" x2="1114" y2="200"/>
+  <text class="t" x="816" y="222">Policy Kernel · rules R1–R13</text>
+  <line class="rule" x1="816" y1="236" x2="1114" y2="236"/>
+  <text class="t" x="816" y="258">Escrow: hold → capture / void</text>
+  <text class="m" x="816" y="276">Test PSP (sandbox, no real money)</text>
+  <line class="rule" x1="816" y1="290" x2="1114" y2="290"/>
+  <text class="t" x="816" y="312">Proof-of-Handoff truth table</text>
+  <text class="m" x="816" y="330">P pass · D doorbell · B before/after</text>
+  <line class="rule" x1="816" y1="344" x2="1114" y2="344"/>
+  <text class="t" x="816" y="366">Receipts: JWS ES256 over</text>
+  <text class="t" x="816" y="384">RFC 8785 canonical JSON</text>
+  <line class="rule" x1="816" y1="398" x2="1114" y2="398"/>
+  <text class="t" x="816" y="420">Capability tokens: 5 min,</text>
+  <text class="t" x="816" y="438">single use, terms-bound</text>
+
+  <rect class="trust" x="800" y="480" width="260" height="80"/>
+  <text class="h2" x="816" y="506">Address boundary</text>
+  <text class="t" x="816" y="528">guard + pass-page reveal (R2)</text>
+  <text class="m" x="816" y="548">agents never see the address</text>
+
+  <rect class="box" x="800" y="740" width="330" height="64"/>
+  <text class="h2" x="816" y="766">Anyone can verify</text>
+  <text class="m" x="816" y="788">/verify · npx proof-of-handoff verify</text>
+
+  <!-- Column D: AWS -->
+  <rect class="dash" x="1200" y="136" width="350" height="144"/>
+  <text class="h2" x="1216" y="164">AWS KMS</text>
+  <text class="t" x="1216" y="190">receipt key: ECC P-256, Sign (DIGEST)</text>
+  <text class="t" x="1216" y="214">token key: HMAC-256 MACs</text>
+  <text class="t amb" x="1216" y="238">address key: Decrypt by the Vault</text>
+  <text class="t amb" x="1216" y="258">Lambda only, not even the root user</text>
+
+  <rect class="dash" x="1200" y="296" width="350" height="56"/>
+  <text class="h2" x="1216" y="320">Amazon DynamoDB</text>
+  <text class="m" x="1216" y="340">single table · conditional writes</text>
+
+  <rect class="dash" x="1200" y="370" width="350" height="62"/>
+  <text class="h2" x="1216" y="394">AWS Step Functions → SQS</text>
+  <text class="m" x="1216" y="416">saga timers: Wait on TimestampPath</text>
+
+  <rect class="dash" x="1200" y="480" width="350" height="80"/>
+  <text class="h2" x="1216" y="506">AWS Lambda: Vault</text>
+  <text class="t" x="1216" y="528">the only principal that decrypts;</text>
+  <text class="t" x="1216" y="548">re-checks R2 from DynamoDB itself</text>
+
+  <!-- arrows: devices -> host -->
+  <path class="ln" d="M310 176H376"/><text class="ms" x="320" y="170">MCP</text>
+  <path class="ln" d="M310 264H376"/>
+  <path class="ln" d="M310 344H376"/>
+  <path class="ln" d="M310 424H376"/>
+  <path class="ln" d="M310 772H376"/><text class="ms" x="318" y="766">events</text>
+  <!-- host internals -->
+  <path class="ln" d="M700 456V496"/>
+  <path class="ln" d="M550 576V600"/><text class="ms" x="558" y="598">Converse</text>
+  <!-- host -> settlement -->
+  <path class="ln" d="M720 200H796"/><text class="ms" x="726" y="194">approve</text>
+  <path class="ln" d="M720 264H796"/><text class="ms" x="726" y="258">checkout</text>
+  <path class="ln" d="M720 530H742V420H796"/><text class="ms" x="748" y="470" transform="rotate(90 748 470)">oracle</text>
+  <path class="ln" d="M720 760H772V330H796"/><text class="ms" x="778" y="574" transform="rotate(90 778 574)">evidence</text>
+  <!-- pass -> boundary -->
+  <path class="lna" d="M310 672H930V564"/><text class="ms" x="330" y="688">address only inside the paid pickup window</text>
+  <!-- settlement -> outputs -->
+  <path class="ln" d="M1095 456V736"/><text class="ms" x="1103" y="720">receipt</text>
+  <!-- settlement -> AWS -->
+  <path class="ln" d="M1130 190H1196"/><text class="ms" x="1136" y="184">sign·MAC</text>
+  <path class="ln" d="M1130 324H1196"/><text class="ms" x="1136" y="318">state</text>
+  <path class="ln" d="M1130 400H1196"/><text class="ms" x="1136" y="394">timers</text>
+  <path class="ln" d="M1060 520H1196"/><text class="ms" x="1112" y="514">invoke</text>
+  <path class="lna" d="M1550 520H1578V200H1554"/><text class="ms" x="1585" y="372" transform="rotate(90 1585 372)">Decrypt</text>
+
+  <!-- legend -->
+  <line x1="1200" y1="752" x2="1240" y2="752" stroke="#1f1d1a"/><text class="m" x="1250" y="756">running today</text>
+  <line x1="1200" y1="776" x2="1240" y2="776" stroke="#1f1d1a" stroke-dasharray="6 4"/><text class="m" x="1250" y="780">AWS, defined in infra/ (deploying)</text>
+  <line x1="1200" y1="800" x2="1240" y2="800" stroke="#c97a1a" stroke-width="2"/><text class="m" x="1250" y="804">trust boundary: holds money or keys</text>
+  <text class="m" x="1200" y="830">Ring events in demos are simulator-signed,</text>
+  <text class="m" x="1200" y="848">labelled on screen; frames are our footage.</text>
+</svg>
