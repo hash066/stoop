@@ -50,7 +50,8 @@ export function deriveSignals(ev: HandoffEvidence): HandoffSignals {
  *  1. camera offline / E2EE / unavailable          -> DEGRADED (dual-confirm path, capped)
  *  2. no after-frame yet                           -> PENDING
  *  3. after = unsure                               -> RETRY_FRAME (x3), then REVIEW
- *  4. after = present                              -> STILL_THERE
+ *  4. after = present                              -> STILL_THERE if the buyer checked in, else PENDING
+ *                                                     (a passer-by triggering a frame isn't a failed pickup)
  *  5. after = absent, before != present            -> REVIEW (bad baseline: can't attribute removal)
  *  6. after = absent, no valid check-in            -> PIRACY_SUSPECTED
  *  7. after = absent, check-in but no Ring presence -> REVIEW (camera may have missed it)
@@ -71,7 +72,9 @@ export function evaluateHandoff(ev: HandoffEvidence): HandoffResult {
       ? r("RETRY_FRAME", "after_frame_unsure", `retry_${ev.unsureRetries + 1}_of_${MAX_UNSURE_RETRIES}`)
       : r("REVIEW", "after_frame_unsure_after_retries");
   }
-  if (ev.after === "present") return r("STILL_THERE", "item_still_on_porch");
+  if (ev.after === "present") {
+    return signals.P ? r("STILL_THERE", "item_still_on_porch") : r("PENDING", "item_present_no_check_in_yet");
+  }
   // after === "absent"
   if (!signals.B) return r("REVIEW", "bad_baseline_item_not_seen_before");
   if (!signals.P) return r("PIRACY_SUSPECTED", "item_gone_without_valid_check_in");

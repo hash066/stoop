@@ -1,0 +1,26 @@
+{
+  "name": "@stoop/settlement",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The only component allowed to move money, reveal addresses or sign receipts. Runs as its own Lambda with its own IAM role in AWS.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@stoop/policy": "workspace:*",
+    "@stoop/proof-of-handoff": "workspace:*",
+    "@stoop/shared": "workspace:*",
+    "hono": "^4.13.13",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  }
+}

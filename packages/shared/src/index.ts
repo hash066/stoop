@@ -157,6 +157,7 @@ export const PolicyAction = z.enum([
   "sign_receipt",
   "issue_pass",
   "send_message",
+  "cancel_sale",
 ]);
 export type PolicyAction = z.infer<typeof PolicyAction>;
 
@@ -182,6 +183,8 @@ export const ApprovalTerms = z.object({
   feesMinor: z.number().int().nonnegative().optional(),
   buyerPseudonym: z.string().optional(),
   window: PickupWindow.optional(),
+  /** Any other term the human saw (e.g. autoAcceptAboveMinor, negotiationId). Part of the hash. */
+  details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
 });
 export type ApprovalTerms = z.infer<typeof ApprovalTerms>;
 
