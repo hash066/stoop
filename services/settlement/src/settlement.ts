@@ -8,7 +8,6 @@ import {
   autoAcceptable,
   decide,
   evaluateHandoff,
-  guardOutgoing,
   INSPECTION_MS,
   isPresenceEvent,
   PRESENCE_WINDOW_MS,
@@ -25,6 +24,8 @@ import {
 } from "@stoop/policy";
 import { receiptHash, sha256Hex, signReceipt, type HandoffReceipt, type ReceiptSigner } from "proof-of-handoff";
 import { newId, type Clock, type EventBus, type Scheduler, type ScheduledJob, type Store, type Vault } from "./infra.ts";
+import { revealInput, storeBoundary, type AddressBoundary } from "./boundary.ts";
+import { K } from "./keys.ts";
 import { PaymentError, type PSP, type PaymentCredential } from "./psp.ts";
 import type {
   Buyer,
@@ -82,28 +83,17 @@ export interface SettlementDeps {
   /** Base URL of the pickup-pass app, e.g. https://pass.stoop.dev */
   passBaseUrl: string;
   issuer?: string;
+  /** Where address plaintext is handled. Default: in-process over `vault`. In AWS: the Vault Lambda. */
+  boundary?: AddressBoundary;
 }
-
-const K = {
-  household: (id: string) => `household#${id}`,
-  buyer: (id: string) => `buyer#${id}`,
-  item: (id: string) => `item#${id}`,
-  listing: (id: string) => `listing#${id}`,
-  mandate: (listingId: string) => `mandate#${listingId}`,
-  nego: (id: string) => `nego#${id}`,
-  approval: (id: string) => `approval#${id}`,
-  deal: (id: string) => `deal#${id}`,
-  activeDeal: (listingId: string) => `activedeal#${listingId}`,
-  pass: (id: string) => `pass#${id}`,
-  evidence: (dealId: string) => `evidence#${dealId}`,
-  receipt: (id: string) => `receipt#${id}`,
-  decision: (at: number, id: string) => `decision#${String(at).padStart(15, "0")}#${id}`,
-};
 
 const hashSecret = (s: string) => createHash("sha256").update(`stoop:${s}`).digest("hex");
 
 export class Settlement {
-  constructor(readonly d: SettlementDeps) {}
+  private readonly boundary: AddressBoundary;
+  constructor(readonly d: SettlementDeps) {
+    this.boundary = d.boundary ?? storeBoundary({ store: d.store, vault: d.vault, now: () => d.clock.now() });
+  }
 
   private now() {
     return this.d.clock.now();
@@ -517,14 +507,11 @@ export class Settlement {
     };
   }
 
-  /** Outbound message guard (R2/R5). Secrets are checked here and never returned. */
+  /** Outbound message guard (R2/R5). Runs inside the address boundary; only the verdict comes back. */
   async checkOutgoing(listingId: string, text: string): Promise<LeakCheck> {
     const l = await this.getListing(listingId);
-    const hh = await this.mustGet<Household>(K.household(l.householdId), "household_not_found");
-    const address = await this.d.vault.decrypt(hh.addressCipher);
-    const m = await this.d.store.get<Mandate>(K.mandate(l.id));
-    const fragments = [address, ...address.split(/,|\n/).map((s) => s.trim())].filter((s) => s.length >= 4);
-    const res = guardOutgoing(text, { addressFragments: fragments, floorMinor: m?.floorMinor });
+    await this.mustGet<Household>(K.household(l.householdId), "household_not_found");
+    const res = await this.boundary.checkOutgoing(l.id, text);
     if (!res.ok) await this.logDecision("send_message", "deny", ["R2", "R5"], res.violations, "agent:negotiator", { listingId });
     return res;
   }
@@ -854,17 +841,8 @@ export class Settlement {
     const hh = await this.mustGet<Household>(K.household(deal.householdId), "household_not_found");
     let address: string | undefined;
     let porchInstructions: string | undefined;
-    const terminal = ["CLOSED", "VOIDED", "CHECKOUT_ABANDONED", "CAPTURED", "PAYOUT_RECORDED"].includes(deal.state);
-    if (deal.window && p.consentAt && !terminal) {
-      const input = {
-        action: "reveal_address" as const,
-        dealState: deal.state,
-        window: deal.window,
-        now: this.now(),
-        requester: { buyerId: p.buyerId, deviceId },
-        bound: { buyerId: deal.buyerId, deviceId: p.deviceId },
-        channel: "pass_page" as const,
-      };
+    const input = revealInput(p, deal, deviceId, this.now());
+    if (input) {
       // The pass polls; audit only when the outcome changes (first reveal, or access ending).
       const decision = decide(input);
       if (decision.outcome !== p.lastAddressOutcome) {
@@ -872,7 +850,8 @@ export class Settlement {
         await this.d.store.put(K.pass(p.id), { ...p, lastAddressOutcome: decision.outcome === "allow" ? "allow" : "deny" });
       }
       if (decision.outcome === "allow") {
-        address = await this.d.vault.decrypt(hh.addressCipher);
+        // the boundary re-checks R2 from stored state before it decrypts
+        address = await this.boundary.revealForPass(p.id, deviceId);
         porchInstructions = hh.porchInstructions;
       }
     }

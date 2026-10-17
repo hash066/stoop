@@ -5,21 +5,28 @@
   "type": "module",
   "description": "The only component allowed to move money, reveal addresses or sign receipts. Runs as its own Lambda with its own IAM role in AWS.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./aws": "./src/aws/index.ts"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1152.0",
+    "@aws-sdk/client-kms": "^3.1152.0",
+    "@aws-sdk/client-lambda": "^3.1152.0",
+    "@aws-sdk/client-sfn": "^3.1152.0",
+    "@aws-sdk/client-sqs": "^3.1152.0",
     "@stoop/policy": "workspace:*",
-    "proof-of-handoff": "workspace:*",
     "@stoop/shared": "workspace:*",
     "hono": "^4.13.13",
+    "proof-of-handoff": "workspace:*",
     "zod": "^4.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "aws-sdk-client-mock": "^4.1.0",
     "typescript": "^5.7.3",
     "vitest": "^3.2.4"
   }

@@ -1,13 +1,14 @@
 import { localHmacProvider, memorySpentStore } from "@stoop/policy";
 import { localSigner } from "proof-of-handoff";
 import type { RingEvent } from "@stoop/shared";
-import { EventBus, localVault, ManualClock, MemoryStore, SandboxPSP, Settlement, TickScheduler } from "../src/index.ts";
+import { EventBus, localVault, ManualClock, MemoryStore, SandboxPSP, Settlement, TickScheduler, type SettlementDeps } from "../src/index.ts";
 
 export const T0 = Date.UTC(2026, 9, 20, 22, 0); // 6 pm EDT
 export const ADDRESS = "1427 Maple Ridge Dr, Columbus, OH 43215";
 export const WALLET = "tok_visa_4242";
 
-export async function makeStack() {
+/** `over` swaps Settlement deps (e.g. a boundary or vault) given the stack's store and clock. */
+export async function makeStack(over: (d: { store: MemoryStore; clock: ManualClock }) => Partial<SettlementDeps> = () => ({})) {
   const clock = new ManualClock(T0);
   const store = new MemoryStore();
   const bus = new EventBus();
@@ -24,6 +25,7 @@ export async function makeStack() {
     bus,
     scheduler,
     passBaseUrl: "http://pass.local",
+    ...over({ store, clock }),
   });
   scheduler.onFire((j) => s.onJob(j));
   const tick = async (ms: number) => {
