@@ -11,9 +11,12 @@ Stoop is an **Alexa+ add-on** (MCP server + MCP Apps cards) and a **Ring Appstor
 
 **The AI never holds the keys.** Money, your address and receipts are controlled by a separate Settlement service under deterministic rules. In a 300-attack red team the selling agent leaked the address **0 times**, because it never had it.
 
-## Run it (Windows, macOS or Linux; Node 22, pnpm)
+## Run it (Windows, macOS or Linux; Node 22)
 
 ```bash
+git clone https://github.com/hash066/stoop.git
+cd stoop
+corepack enable     # provides the pinned pnpm (11.0.8)
 pnpm install
 pnpm demo
 ```
@@ -55,6 +58,13 @@ pnpm eval:poh       # proof-of-handoff confusion matrix -> evals/POH_REPORT.md
   - offer flooding (rate limited before any model call)
   - MCP Tasks: `watch_handoff` follows a sale to CLOSED, stays private to its owner, and can be cancelled
 
+**Browser QA and demo recording** (needs `pnpm demo` running and Google Chrome; uses `playwright-core`, which never downloads a browser):
+
+```bash
+pnpm qa       # every judged surface at 1280x800 and 390 px: console/HTTP errors + screenshots
+pnpm record   # the golden path as one .webm clip per surface, for the video
+```
+
 **Simulated Ring events from the command line** (local or deployed; always labelled simulator-signed):
 
 ```bash
@@ -89,7 +99,7 @@ See [`apps/firetv/README.md`](apps/firetv/README.md) for details and the Android
 - [`docs/RING_CERT_NOTES.md`](docs/RING_CERT_NOTES.md) · [`docs/AI_DISCLOSURE.md`](docs/AI_DISCLOSURE.md) · [`docs/PLAN.md`](docs/PLAN.md)
 - Open source:
   - [`packages/proof-of-handoff`](packages/proof-of-handoff): verify any receipt with `poh verify`
-  - [`oss/ring-api-helloworld`](oss/ring-api-helloworld): a media-helpers contribution to Amazon's Ring starter
+  - [`oss/ring-api-helloworld`](oss/ring-api-helloworld): a media-helpers contribution to Amazon's Ring starter, open upstream as [AmazonAppDev/ring-api-helloworld#36](https://github.com/AmazonAppDev/ring-api-helloworld/pull/36) (issue [#35](https://github.com/AmazonAppDev/ring-api-helloworld/issues/35))
 
 ## Repo layout
 

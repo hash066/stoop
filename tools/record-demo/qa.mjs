@@ -9,7 +9,7 @@
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { URLS, TOKENS, resolvePlaywright, launchChrome, collectConsole, sleep, mcp, stackJson, otpFor } from './lib.mjs';
+import { URLS, TOKENS, resolvePlaywright, launchChrome, collectConsole, sleep, mcp, stackJson, otpFor, assertOffer } from './lib.mjs';
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), 'qa-shots');
 mkdirSync(OUT, { recursive: true });
@@ -34,7 +34,7 @@ async function setupState() {
   const found = await mcp('buyer', 'search_listings', { query: 'jogging stroller', maxPriceDollars: 100 }, idRef);
   const listingId = found.data?.results?.[0]?.listingId;
   if (!listingId) throw new Error(`setup: no stroller listing (${found.text})`);
-  await mcp('buyer', 'make_offer', { listingId, amountDollars: 95 }, idRef);
+  assertOffer(await mcp('buyer', 'make_offer', { listingId, amountDollars: 95 }, idRef));
   const accepted = await mcp('seller', 'respond_to_offer', { decision: 'accept' }, idRef);
   const dealId = accepted.data?.dealId;
   await mcp('buyer', 'checkout', {}, idRef);

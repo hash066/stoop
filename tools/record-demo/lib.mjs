@@ -1,6 +1,6 @@
 // Shared helpers for the Stoop browser tools (UI QA + demo recording).
 //
-// Playwright is resolved at runtime from, in order: a normal `playwright` install,
+// Playwright is resolved at runtime from, in order: the root `playwright-core` devDependency, `playwright`,
 // $STOOP_PLAYWRIGHT, or the Codex runtime cache. The browser is the *system* Google
 // Chrome (via executablePath or channel:'chrome'), so nothing downloads a Chromium.
 // Override the binary with $STOOP_CHROME if Chrome lives elsewhere.
@@ -23,6 +23,7 @@ export const URLS = {
 export const TOKENS = { seller: 'seller-demo-okafor', buyer: 'buyer-demo-dana' };
 
 const PW_CANDIDATES = [
+  'playwright-core', // root devDependency; never downloads a browser
   'playwright',
   process.env.STOOP_PLAYWRIGHT,
   join(homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'),
@@ -118,6 +119,12 @@ export async function mcp(role, name, args = {}, idRef = { n: 0 }) {
   return { text, data, isError: !!result.isError };
 }
 
+/** A refused offer usually means a long-running stack has rate-limited the demo buyer (X2). */
+export function assertOffer(res) {
+  if (res.isError) throw new Error(`make_offer refused: "${res.text}". Restart the stack for a fresh demo state.`);
+  return res;
+}
+
 export async function stackJson(method, path, body, headers = {}) {
   const res = await fetch(`${URLS.stack}${path}`, {
     method,
@@ -139,7 +146,7 @@ export async function createDealToWindow({ offerDollars = 95 } = {}) {
   const found = await mcp('buyer', 'search_listings', { query: 'jogging stroller', maxPriceDollars: 100 }, idRef);
   const listingId = found.data?.results?.[0]?.listingId;
   if (!listingId) throw new Error(`no listing found: ${found.text}`);
-  await mcp('buyer', 'make_offer', { listingId, amountDollars: offerDollars }, idRef);
+  assertOffer(await mcp('buyer', 'make_offer', { listingId, amountDollars: offerDollars }, idRef));
   const accepted = await mcp('seller', 'respond_to_offer', { decision: 'accept' }, idRef);
   const dealId = accepted.data?.dealId;
   await mcp('buyer', 'checkout', {}, idRef);
@@ -162,7 +169,7 @@ export async function settleDeal({ query = 'jogging stroller', maxPriceDollars =
   const found = await mcp('buyer', 'search_listings', { query, maxPriceDollars }, idRef);
   const listingId = found.data?.results?.[0]?.listingId;
   if (!listingId) throw new Error(`settleDeal: no live listing for "${query}" (${found.text})`);
-  await mcp('buyer', 'make_offer', { listingId, amountDollars: offerDollars }, idRef);
+  assertOffer(await mcp('buyer', 'make_offer', { listingId, amountDollars: offerDollars }, idRef));
   const accepted = await mcp('seller', 'respond_to_offer', { decision: 'accept' }, idRef);
   const dealId = accepted.data?.dealId;
   await mcp('buyer', 'checkout', {}, idRef);
