@@ -23,11 +23,23 @@
 | 2:40–2:55 | **Proof** | Open the receipt `verify ↗` | SIGNATURE VALID (ES256), hashes only. Benchmark: "0 / 300 address leaks under attack" (`evals/REPORT.md`). Architecture slide |
 | 2:55–3:00 | End card | "Sell anything without meeting anyone. Built for Alexa+ and the Ring Appstore." | – |
 
+## Before you record
+
+- **Restart the stack** (`pnpm stack`). Its state is in memory, and after many practice runs the demo buyer hits the offer rate limit (scrutiny case X2) and offers are refused.
+- **Live models:** start the stack with `LLM_MODE=bedrock AWS_PROFILE=stoop` to run the agents and vision on Amazon Bedrock (Nova 2 Lite). Expect about 3–6 s per negotiator turn from India; trim pauses in the edit. Offline mode is deterministic and instant.
+- `pnpm record` captures the golden path as one clip per surface (`tools/record-demo/clips/`) if you want a scripted take.
+
+## Extra moments (use if time allows)
+
+- **MCP Tasks, 5 s:** on the seller device open **Developer view** → **Watch my sale as a task** before the handoff. The task's status lines update live ("The pickup window is open…" → "Pickup verified by your doorbell…") and the JSON-RPC log shows `tools/call … +task` and the `tasks/get` polls.
+- **The boundary, 5 s (after the AWS deploy):** `aws kms decrypt` on an address ciphertext as the account root → `AccessDenied`. Only the Vault Lambda can read an address.
+- Ops header chips show what's live: LLM, vision, payments (Test PSP), camera, Ring API, settlement (AWS vs local twins).
+
 ## AWS moments to add once deployed
 
 - AgentCore Runtime console showing the agent.
 - Step Functions execution graph for the deal saga.
-- The KMS key used for the receipt `kid`.
+- The KMS key used for the receipt `kid`, and the address key's policy (Decrypt: Vault Lambda only).
 - CloudWatch GenAI Observability trace of a Negotiator turn.
 
 ## Don'ts
