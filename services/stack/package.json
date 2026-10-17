@@ -17,7 +17,7 @@
     "@stoop/agents": "workspace:*",
     "@stoop/mcp-server": "workspace:*",
     "@stoop/policy": "workspace:*",
-    "@stoop/proof-of-handoff": "workspace:*",
+    "proof-of-handoff": "workspace:*",
     "@stoop/ring-bridge": "workspace:*",
     "@stoop/settlement": "workspace:*",
     "@stoop/shared": "workspace:*",

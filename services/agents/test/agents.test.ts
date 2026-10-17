@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { localHmacProvider, memorySpentStore } from "@stoop/policy";
-import { localSigner } from "@stoop/proof-of-handoff";
+import { localSigner } from "proof-of-handoff";
 import { EventBus, localVault, ManualClock, MemoryStore, SandboxPSP, Settlement, TickScheduler } from "@stoop/settlement";
 import {
   Appraiser,

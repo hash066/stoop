@@ -4,7 +4,7 @@
 // Responses carry Cache-Control: no-store. Amazon defines no escrow; our hold-then-release is our own layer.
 import { createHash } from "node:crypto";
 import { Hono, type Context } from "hono";
-import { canonicalize } from "@stoop/proof-of-handoff";
+import { canonicalize } from "proof-of-handoff";
 import { newId, type Store } from "./infra.ts";
 import { Settlement, SettlementError } from "./settlement.ts";
 

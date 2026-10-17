@@ -1,16 +1,56 @@
 {
-  "name": "@stoop/proof-of-handoff",
+  "name": "proof-of-handoff",
   "version": "0.1.0",
   "description": "Signed, independently verifiable receipts for contactless porch handoffs (JCS canonical JSON + JWS ES256).",
   "license": "MIT",
   "type": "module",
+  "keywords": [
+    "receipt",
+    "jws",
+    "es256",
+    "jcs",
+    "rfc8785",
+    "escrow",
+    "ring",
+    "proof-of-handoff"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hash066/stoop.git",
+    "directory": "packages/proof-of-handoff"
+  },
+  "homepage": "https://github.com/hash066/stoop/tree/main/packages/proof-of-handoff#readme",
+  "bugs": "https://github.com/hash066/stoop/issues",
+  "engines": {
+    "node": ">=20"
+  },
   "exports": {
     ".": "./src/index.ts"
   },
   "bin": {
     "poh": "./src/cli.ts"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    },
+    "bin": {
+      "poh": "./dist/cli.js"
+    },
+    "types": "./dist/index.d.ts"
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/fix-dts-extensions.mjs",
+    "prepack": "pnpm run build",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },

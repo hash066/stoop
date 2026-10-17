@@ -23,7 +23,7 @@ import {
   type MacProvider,
   type SpentTokenStore,
 } from "@stoop/policy";
-import { receiptHash, sha256Hex, signReceipt, type HandoffReceipt, type ReceiptSigner } from "@stoop/proof-of-handoff";
+import { receiptHash, sha256Hex, signReceipt, type HandoffReceipt, type ReceiptSigner } from "proof-of-handoff";
 import { newId, type Clock, type EventBus, type Scheduler, type ScheduledJob, type Store, type Vault } from "./infra.ts";
 import { PaymentError, type PSP, type PaymentCredential } from "./psp.ts";
 import type {

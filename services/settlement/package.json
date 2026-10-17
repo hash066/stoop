@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@stoop/policy": "workspace:*",
-    "@stoop/proof-of-handoff": "workspace:*",
+    "proof-of-handoff": "workspace:*",
     "@stoop/shared": "workspace:*",
     "hono": "^4.13.13",
     "zod": "^4.2.0"

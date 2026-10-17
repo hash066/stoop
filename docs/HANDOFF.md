@@ -43,7 +43,7 @@
 - **Ask the user first** before:
   - creating the public GitHub repo (`hash066/stoop`)
   - forking or opening the PR to `AmazonAppDev/ring-api-helloworld`
-  - publishing `@stoop/proof-of-handoff` to npm
+  - publishing `proof-of-handoff` to npm
   - posting anything publicly
   - large downloads onto C: (only about 11 GB free; see Fire TV)
 - **No third-party logos** (Amazon, Alexa, Ring, Meta) in UI or video.
@@ -253,7 +253,7 @@ Steps:
 - Needs permission to fork and open.
 - The PR body is in `oss/ring-api-helloworld/PR_DESCRIPTION.md`. It references the existing PRs #31 and #32.
 
-**npm:** publishing `@stoop/proof-of-handoff` needs permission.
+**npm:** publishing `proof-of-handoff` needs permission.
 
 **Assets from the team:**
 - Real porch footage: about 15 before/after pairs plus 3 handoff clips. They go in `fixtures/footage/`; see `fixtures/README.md`.
@@ -285,6 +285,6 @@ pnpm ring-sim replay                      # against a running stack: 200, duplic
 1. OK to download the Android TV system image (about 1.5 GB on C:) and build for the emulator?
 2. When will you run `aws login` for the AWS phase? Is Bedrock model access enabled on the account?
 3. OK to create the public GitHub repo `hash066/stoop` now?
-4. OK to fork `ring-api-helloworld` and open the media-helpers PR, and to publish `@stoop/proof-of-handoff` to npm?
+4. OK to fork `ring-api-helloworld` and open the media-helpers PR, and to publish `proof-of-handoff` to npm?
 5. Do you have a Ring Developer account and a Playground token?
 6. When will the footage, photos and the real story arrive?

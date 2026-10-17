@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { verifyReceipt } from "@stoop/proof-of-handoff";
+import { verifyReceipt } from "proof-of-handoff";
 import { ADDRESS, agreedDeal, frame, fundedDeal, liveListing, makeStack, openWindowDeal, ringEvent, WALLET } from "./helpers.ts";
 
 describe("golden path", () => {

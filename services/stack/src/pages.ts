@@ -1,5 +1,5 @@
 // Public, server-rendered pages: receipt verification and the refund policy linked from UCP sessions.
-import type { VerifyOutcome } from "@stoop/proof-of-handoff";
+import type { VerifyOutcome } from "proof-of-handoff";
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const t = (ms?: number) => (ms ? new Date(ms).toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC") : "–");
@@ -42,7 +42,7 @@ export function verifyPageHtml(r: { id: string; jws: string; hash: string }, out
 </table>
 <h2>Verify it yourself</h2>
 <p>This page contains hashes only: no address, no images, no identities. Check the signature offline with the open-source verifier:</p>
-<p><code>npx @stoop/proof-of-handoff verify ${esc(base)}/receipts/${esc(r.id)} --jwks ${esc(base)}/.well-known/jwks.json</code></p>`,
+<p><code>npx proof-of-handoff verify ${esc(base)}/receipts/${esc(r.id)} --jwks ${esc(base)}/.well-known/jwks.json</code></p>`,
   );
 }
 

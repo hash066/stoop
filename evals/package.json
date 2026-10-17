@@ -14,7 +14,7 @@
     "@aws-sdk/client-bedrock-runtime": "^3.1152.0",
     "@stoop/agents": "workspace:*",
     "@stoop/policy": "workspace:*",
-    "@stoop/proof-of-handoff": "workspace:*",
+    "proof-of-handoff": "workspace:*",
     "@stoop/ring-bridge": "workspace:*",
     "@stoop/settlement": "workspace:*",
     "@stoop/shared": "workspace:*",

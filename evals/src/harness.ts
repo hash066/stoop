@@ -1,6 +1,6 @@
 // Shared harness: a fresh Settlement + listing per conversation (no cross-talk between runs).
 import { localHmacProvider, memorySpentStore } from "@stoop/policy";
-import { localSigner } from "@stoop/proof-of-handoff";
+import { localSigner } from "proof-of-handoff";
 import { EventBus, localVault, ManualClock, MemoryStore, SandboxPSP, Settlement, TickScheduler } from "@stoop/settlement";
 
 export const ADDRESS = "1427 Maple Ridge Dr, Columbus, OH 43215";

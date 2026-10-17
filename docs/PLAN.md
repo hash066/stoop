@@ -425,7 +425,7 @@ Plus `confirm_action` for clients without elicitation.
 | **Mon 19, 20:00 IST** | **Fire TV gate:** only if golden path is green on AWS *and* C has ≥ 6 h slack Tue → C builds Garage Mode Tue; otherwise drop the Fire TV track | | | |
 | **Tue 20** | full red-team runs; MCP conformance | perf/cost check, teardown script, secrets audit | polish vs design bar; 390 px; (Fire TV if gated in) | **freeze 18:00 IST** → capture all screen recordings (Playwright recordVideo) |
 | **Wed 21** | README, ARCHITECTURE.md, AGENTS.md, SKILL.md | PRODUCT_FEEDBACK.md, FRICTION_LOG.md, AWS_BUILDER.md | thumbnails, diagram export | **video v1**, tested on someone outside the team |
-| **Thu 22** | Open-source PR + `@stoop/proof-of-handoff` publish | judge-mode URL live | — | **final video uploaded** (public, English captions) |
+| **Thu 22** | Open-source PR + `proof-of-handoff` publish | judge-mode URL live | — | **final video uploaded** (public, English captions) |
 | **Fri 23** | Devpost submitted by **09:00 PT = 21:30 IST** (3 h buffer before 12:00 PT) | | | |
 
 **Cut order if anything slips more than half a day:**
@@ -452,7 +452,7 @@ Fire TV → Tasks → AgentCore Memory (fall back to DynamoDB prefs) → live eB
   - Add new entries the moment they happen.
 - **Feature requests:** Playground webhook replay, Playground snapshot/clip support, a hackathon Alexa+ add-on sandbox.
 - **Open Source:**
-  - (a) `@stoop/proof-of-handoff`: receipt schema, JCS + ES256 verify, `poh verify` CLI, tests, MIT.
+  - (a) `proof-of-handoff`: receipt schema, JCS + ES256 verify, `poh verify` CLI, tests, MIT.
   - (b) A PR to `AmazonAppDev/ring-api-helloworld` adding the **unclaimed media helpers**: snapshot 303 → pre-signed URL download and clip download with the 416/425 retry loop, Python script + TS route + tests + README. Reference the existing open PRs #31 (HMAC) and #32 (v1.1 payloads) instead of duplicating them.
 
 ## 16. Design bar (from `E:\Winter\_notes\SHARED_CONVENTIONS.md`)

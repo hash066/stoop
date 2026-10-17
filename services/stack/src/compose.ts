@@ -10,7 +10,7 @@ import { streamSSE } from "hono/streaming";
 import { Appraiser, cpscChecker, llmMode, Negotiator, planTurn, rulesOnlyChecker, type RecallChecker } from "@stoop/agents";
 import { loadCards, mcpRouter, type BuyerActor, type SellerActor, type StoopContext } from "@stoop/mcp-server";
 import { localHmacProvider, memorySpentStore } from "@stoop/policy";
-import { localSigner, verifyReceipt } from "@stoop/proof-of-handoff";
+import { localSigner, verifyReceipt } from "proof-of-handoff";
 import { buildEnvelope, FootageSource, RingClient, RingSnapshotSource, ringWebhookRouter, signBody, type FrameSource, type Scene } from "@stoop/ring-bridge";
 import {
   EventBus,

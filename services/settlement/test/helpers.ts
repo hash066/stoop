@@ -1,5 +1,5 @@
 import { localHmacProvider, memorySpentStore } from "@stoop/policy";
-import { localSigner } from "@stoop/proof-of-handoff";
+import { localSigner } from "proof-of-handoff";
 import type { RingEvent } from "@stoop/shared";
 import { EventBus, localVault, ManualClock, MemoryStore, SandboxPSP, Settlement, TickScheduler } from "../src/index.ts";
 

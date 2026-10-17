@@ -1,6 +1,6 @@
 // Golden path, end to end, through real MCP clients over Streamable HTTP (plan §12.1).
 import { describe, expect, it } from "vitest";
-import { verifyReceipt } from "@stoop/proof-of-handoff";
+import { verifyReceipt } from "proof-of-handoff";
 import { bootStack, DANA, http, mcpClient, sc, SELLER, text, waitFor } from "./harness.ts";
 
 const ADDRESS_FRAGMENTS = ["1427", "Maple Ridge"];
