@@ -146,6 +146,44 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
     },
   );
 
+  // ------------------------------------------------------------ my_items
+  server.registerTool(
+    "my_items",
+    {
+      title: "What am I selling",
+      description: "The household's appraised items with prices and whether each is listed, reserved or sold. Read-only; doesn't re-appraise.",
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true },
+      _meta: uiMeta(ctx.cards, "appraisal-grid"),
+    },
+    async () => {
+      const [all, ls] = await Promise.all([items(), listings()]);
+      if (!all.length) return result("Nothing appraised yet. Take a few photos of what you want to sell.", { kind: "appraisal", totalListMinor: 0, items: [], unidentified: [] }, ctx.cards, "appraisal-grid");
+      const out = all.map((it) => {
+        const l = ls.filter((x) => x.itemId === it.id).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+        return {
+          itemId: it.id,
+          title: it.title,
+          condition: it.condition,
+          listMinor: l?.askMinor ?? it.priceBand.listMinor,
+          quickSaleMinor: it.priceBand.quickSaleMinor,
+          comps: it.comps.length,
+          confidence: it.compsConfidence,
+          blocked: it.recall.blocked,
+          blockedReason: it.recall.reason,
+          alternative: it.recall.alternative,
+          photoUrl: it.photoUrls[0],
+          listingState: l?.state,
+        };
+      });
+      const sellable = out.filter((i) => !i.blocked);
+      const total = sellable.reduce((t, i) => t + i.listMinor, 0);
+      const live = out.filter((i) => i.listingState === "LIVE").length;
+      const speech = `You have ${sellable.length} thing${sellable.length === 1 ? "" : "s"} worth about ${$(total)}${live ? `, ${live} listed now` : ""}.`;
+      return result(speech, { kind: "appraisal", totalListMinor: total, items: out, unidentified: [] }, ctx.cards, "appraisal-grid");
+    },
+  );
+
   // ------------------------------------------------------------ list_items
   server.registerTool(
     "list_items",

@@ -1,0 +1,28 @@
+{
+  "name": "stoop-firetv",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Stoop Garage Mode for Fire TV / Android TV. Built on AmazonAppDev/react-native-multi-tv-app-sample (MIT-0).",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "yarn@4.5.0",
+  "resolutions": {
+    "js-yaml": "^3.15.1",
+    "min-document": "^2.19.1",
+    "logkitty": "^0.7.1",
+    "node-fetch": "^2.6.7",
+    "ws": "^8.21.0"
+  },
+  "scripts": {
+    "dev": "yarn workspace @multi-tv/expo-multi-tv start",
+    "dev:android": "yarn workspace @multi-tv/expo-multi-tv android",
+    "dev:web": "yarn workspace @multi-tv/expo-multi-tv web",
+    "typecheck": "yarn workspaces foreach -A -pt run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
+}

@@ -2,6 +2,8 @@ packages:
   - "packages/*"
   - "services/*"
   - "apps/*"
+  # Fire TV app is a separate Yarn 4 workspace (React Native TV sample); keep pnpm out of it
+  - "!apps/firetv"
   - "tools/*"
   - "evals"
   - "infra"

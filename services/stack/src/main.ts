@@ -8,7 +8,8 @@ const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
 const port = Number(process.env.PORT ?? 8787);
 const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? `http://localhost:${port}`;
 const passBaseUrl = process.env.PASS_BASE_URL ?? "http://localhost:5182";
-const origins = (process.env.ALLOWED_ORIGINS ?? "http://localhost:5180,http://localhost:5181,http://localhost:5182,http://localhost:5183").split(",");
+// 8082 = Fire TV Garage Mode on the Expo web target (the Android TV build sends no Origin)
+const origins = (process.env.ALLOWED_ORIGINS ?? "http://localhost:5180,http://localhost:5181,http://localhost:5182,http://localhost:5183,http://localhost:8082").split(",");
 
 const stack = await createStack({
   publicBaseUrl,
