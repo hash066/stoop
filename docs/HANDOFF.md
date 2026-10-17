@@ -1,8 +1,8 @@
 # Stoop: handoff for the next build agent
 
-> Written Sat Oct 17 2026. **Deadline: Fri Oct 23 2026, 12:00 PM PT (Sat Oct 24, 00:30 IST).** Target submit time: Fri 09:00 PT, which leaves a 3-hour buffer. Feature freeze: **Tue Oct 20, 18:00 IST**.
+> Written Sat Oct 17 2026, updated 22:30 IST the same day. **Deadline: Fri Oct 23 2026, 12:00 PM PT (Sat Oct 24, 00:30 IST).** Target submit time: Fri 09:00 PT, which leaves a 3-hour buffer. Feature freeze: **Tue Oct 20, 18:00 IST**.
 >
-> Repo: `E:\Winter\stoop` (git, branch `main`, local only and not pushed). Last commit: `ab3cf8a`.
+> Repo: `E:\Winter\stoop`, pushed to https://github.com/hash066/stoop (public, branch `main`).
 
 ## 1. What Stoop is (30 seconds)
 
@@ -41,10 +41,8 @@
 - **Never type or handle credentials.** The user signs in to AWS (`aws login` / `aws configure sso`) and pastes Ring tokens themselves. Never commit secrets: `.env*` and `.data/` are gitignored.
   - A dev signing key was once committed and had to be scrubbed from history. Run `git diff --cached` before every commit.
 - **Ask the user first** before:
-  - creating the public GitHub repo (`hash066/stoop`)
-  - forking or opening the PR to `AmazonAppDev/ring-api-helloworld`
-  - publishing `proof-of-handoff` to npm
-  - posting anything publicly
+  - posting anything publicly (the repo, the upstream PR #36 and npm were approved on Oct 17)
+  - creating AWS resources beyond the approved `StoopStack` and AgentCore deploys
   - large downloads onto C: (only about 11 GB free; see Fire TV)
 - **No third-party logos** (Amazon, Alexa, Ring, Meta) in UI or video.
 - **Label everything simulated:** "Simulator-signed event", "Our footage", "Test PSP", "Alexa+ simulator".
@@ -78,197 +76,85 @@
 
 **Shell:**
 - The PowerShell tool is primary; the Bash tool (Git Bash) also works.
-- **Bash heredocs that contain an apostrophe (`'`) fail to parse.** Write multi-line edits as a Python script in the scratchpad and run it with `python <path>`, or use the Edit/Write tools.
+- **Bash heredocs mangle quotes and `\r\n` escapes.** Write multi-line scripts with the Write tool into the job's scratch dir and run them (`python -I <path>`), or use the Edit tool.
+- Many files are CRLF in the working copy (`core.autocrlf=true`). Patch scripts must normalise `\r\n`, edit, then restore.
 - Commit messages: write them to a file, then `git commit -F <file>`.
+- `vitest` output is coloured: strip ANSI (`sed 's/\x1b\[[0-9;]*m//g'`) before grepping for `Tests`.
 
 **Packages:**
-- pnpm is **11.0.8** (`packageManager`). `pnpm-workspace.yaml` has `allowBuilds: esbuild: true`.
+- pnpm is **11.0.8** (`packageManager`). `pnpm-workspace.yaml` has `allowBuilds: esbuild: true`; the store is on E:.
 - `apps/firetv` is **excluded** from pnpm. It is a separate **Yarn 4.5** workspace: run `corepack yarn …`. A plain `yarn` on PATH is 1.22, so don't use it.
 
-**Preview servers** (desktop app):
-- Configs live at `E:\Winter\.claude\launch.json` (the session root): `stoop-stack` (8787), `stoop-alexa-sim` (5180), `stoop-pass` (5182), `stoop-ops` (5183).
-- Start them with `preview_start` by name. **Restart `stoop-stack` after server code changes.**
+**Local stacks:**
+- `pnpm stack` serves :8787 (offline models). The three Vite apps run on 5180 (alexa-sim), 5182 (pass), 5183 (ops).
+- **Restart the stack after server code changes.** Its state is in memory; after many QA runs the demo buyer hits the offer rate limit (X2) and `make_offer` is refused. Restart before recording.
+- A second stack on live Bedrock: `cd services/stack; PORT=8797 LLM_MODE=bedrock AWS_PROFILE=stoop AWS_REGION=us-east-1 npx tsx src/main.ts`. The tools take `STOOP_STACK_URL=http://localhost:8797`.
 - Run `pnpm cards` after editing `packages/ui-cards`.
 
-**Tests:** run them inside a PowerShell `Start-Job` with a timeout (see §6). The full suite takes about 1–2 minutes.
+**Browser tools** (`tools/record-demo`, system Chrome via the `playwright-core` devDependency, no browser download):
+- `pnpm qa`: every judged surface at 1280×800 and 390 px, console/HTTP errors, screenshots in `tools/record-demo/qa-shots/` (gitignored).
+- `pnpm record`: the golden path as one `.webm` per surface in `tools/record-demo/clips/` (gitignored).
+- `node tools/record-demo/diagram.mjs`: re-render `docs/architecture.png` from `docs/architecture.svg`.
 
-**Browser limits:**
-- The MCP server returns **405 on GET**, so there is no standalone SSE stream. Browsers allow only 6 connections per host, and the default GET stream stalled `initialize`.
-- Server notifications sent outside a request are therefore dropped. Clients poll (this applies to Tasks).
+**AWS:**
+- Profile **`stoop`**, created with `aws login` (console credentials; account `428516841578`, root user; temporary credentials refresh automatically). Use `--profile stoop` or `AWS_PROFILE=stoop`; the JS SDK v3.1152 reads it.
+- **Account activation is incomplete** (as of Oct 17, 22:15 IST): only STS, IAM, ECR, Bedrock, Budgets and the AgentCore control plane answer. CloudFormation, KMS, DynamoDB, Lambda, Step Functions, SQS, S3, CloudWatch Logs, EC2 and Lightsail return `OptInRequired` / `SubscriptionRequired`. **Check with exit codes**, not `| head -1`: CLI errors start with a blank line, which once made blocked calls look like empty successes.
+- Budget: `stoop-hackathon-25usd` ($25/month, credits excluded, emails at 80% and 100% actual and 100% forecast). The account has $100 of credits.
+- Docker 29.4 is installed (x86_64 daemon; use `docker buildx --platform linux/arm64` for AgentCore images).
 
 **MCP SDK:**
 - The SDK is `@modelcontextprotocol/sdk` **1.32.1**, the v1 line. Don't switch to the v2 split packages: the hackathon requires spec 2025-11-25.
-- Experimental Tasks:
-  - `registerToolTask` needs a raw zod shape for `inputSchema`. `z.object` types the arguments as `unknown`.
-  - `taskSupport: "optional"` makes a plain call block until the task ends, so use `"required"`.
-  - Task stores are per actor (`services/mcp-server/src/http.ts`).
+- Experimental Tasks: `registerToolTask` needs a raw zod shape for `inputSchema`; `taskSupport: "optional"` makes a plain call block until the task ends, so use `"required"`; task stores are per actor (`services/mcp-server/src/http.ts`).
+- The MCP server returns **405 on GET** (no standalone SSE stream: browsers allow 6 connections per host). Server notifications outside a request are dropped, so clients poll; the alexa-sim Tasks panel polls `tasks/get`.
 
-**Local runtime:**
-- `LLM_MODE` unset = offline (ScriptedModel + templates); `LLM_MODE=bedrock` = live Bedrock.
-- Demo tokens: seller `seller-demo-okafor`; buyers `buyer-demo-dana` (purchase code 4821) and `buyer-demo-lee`. These are local demo values in `services/stack/src/compose.ts` (`DEMO`), not real credentials.
+**Runtime modes:**
+- `LLM_MODE` unset = offline (ScriptedModel + templates); `LLM_MODE=bedrock` = live Bedrock (Nova 2 Lite).
+- Demo tokens: seller `seller-demo-okafor`; buyers `buyer-demo-dana` (purchase code 4821) and `buyer-demo-lee`. Local demo values in `services/stack/src/compose.ts` (`DEMO`), not real credentials.
 
-## 5. Current state (verified Oct 17, commit `ab3cf8a`)
+## 5. Current state (verified Oct 17, 22:30 IST)
 
-`pnpm typecheck` is clean and `pnpm test` gives **183 passed**:
-
-| Suite | Tests |
-|---|---|
-| receipts | 6 |
-| policy | 86 |
-| ring-bridge | 8 |
-| settlement + UCP | 38 |
-| verifier | 4 |
-| ring-sim | 3 |
-| agents | 21 |
-| MCP end-to-end (golden, scrutiny, Tasks, my_items) | 17 |
-
-**Evals (offline):**
-- Red team: Stoop leaked the address in 0/300 attacks and the floor in 0/300, and accepted 0/70 scams.
-- 200 benign buyers: 100 deals, average $95.30.
-- PoH confusion matrix: 40/40 correct, 0 false releases.
-
-**Status by module:**
+- **Public repo:** https://github.com/hash066/stoop (MIT). CI (`.github/workflows/ci.yml`) is green on every push: typecheck, all tests, offline evals, the OSS helper tests.
+- `pnpm typecheck` is clean and the suite is **201 tests**: receipts 6, policy 86, ring-bridge 8, settlement + UCP + AWS adapters 50, verifier 5, ring-sim 3, agents 24, MCP end-to-end 19.
+- **Live Bedrock golden path verified:** appraise → list → haggle (incl. an injection attempt) → $95 → hold → doorbell → VERIFIED → receipt VALID, 18.6 s from India (each negotiator turn ~3.5 s for about two model calls; Bedrock itself answers in ~0.7 s per call, the rest is the network from India). Found and fixed: SVG placeholders sent to Bedrock broke the appraisal.
+- **Red team on live Bedrock:** see `evals/REPORT.md` (Nova 2 Lite; includes the naive baseline).
 
 | Area | Path | Status |
 |---|---|---|
-| Policy Kernel (R1–R13, saga, PoH truth table with presence grace, tokens, oracle, guards) | `packages/policy` | Done |
-| Receipts (JCS + JWS ES256, DER→raw, `poh verify` CLI), the OSS package | `packages/proof-of-handoff` | Done; npm publish needs the user's OK |
-| Settlement (listings, approvals, negotiation, offer rate limit X2, deals, escrow, pass, evidence, capture/void, jobs) + UCP 2026-04-08 router | `services/settlement` | Done (in-memory twins) |
-| Ring bridge (HMAC webhook, v1.1 normalize, dedupe, Partner API client, frame sources) | `services/ring-bridge` | Done; real Playground calls need a token |
-| Simulator CLI (`pnpm ring-sim event button / replay / scenario golden`) | `tools/ring-sim` | Done |
-| Verifier (label vision offline, Bedrock vision adapter) | `services/verifier` | Done offline |
-| Agents (Strands Negotiator with guarded tools, Appraiser, BuyerBot, planner) | `services/agents` | Done offline |
-| MCP server (seller + buyer, sessions + stateless, form/URL elicitation, approval fallback, MCP Apps cards, Tasks `watch_handoff`, `my_items`) | `services/mcp-server` | Done |
-| Local composition (routes, Marshal, SSE, pass API, `/verify`, `/sim/*`, planner) | `services/stack` | Done |
-| 6 MCP Apps cards (single-file HTML) | `packages/ui-cards` | Done |
-| Alexa+ simulator (seller/buyer), pickup pass, Ops console | `apps/alexa-sim`, `apps/pass`, `apps/ops` | Done; verified live in the browser pane |
-| Red team + PoH evals | `evals/` | Done offline; the naive baseline needs `LLM_MODE=bedrock` |
-| Ring starter media-helpers contribution (Python + TS route + tests + `PR_DESCRIPTION.md`) | `oss/ring-api-helloworld` | Ready; PR needs the user's OK |
-| Kiro spec + CI workflow | `.kiro/`, `.github/workflows/ci.yml` | Written; CI hasn't run (no remote) |
-| **Fire TV Garage Mode** | `apps/firetv` | Installed (Yarn 4, hoisted to root); `corepack yarn typecheck` clean; `expo export -p web` bundles (901 modules); stack serves its MCP calls. Interactive drive/screenshot + Android emulator still pending (see §8 Q1) |
-| AWS (CDK stack, KMS/DynamoDB/Step Functions adapters, AgentCore deploy) | `infra/` (doesn't exist yet) | **Not started; blocked on the user's AWS sign-in** |
+| Policy Kernel, receipts, Settlement, UCP, Ring bridge, ring-sim, verifier, agents, MCP server, stack | see README | Done; agents verified on live Bedrock |
+| **Address boundary** | `services/settlement/src/boundary.ts` | Done. All address plaintext goes through it; re-derives R2 from the store |
+| **AWS adapters** (Kiro tasks 7–9) | `services/settlement/src/aws/` (`@stoop/settlement/aws`) | Done, unit-tested with `aws-sdk-client-mock` |
+| **CDK StoopStack** (task 10) | `infra/` | `cdk synth` clean; **not deployed** (activation) |
+| Ring Playground run | `/ring/snapshot/:deviceId`, `/ring/bind`, Ops buttons | Code ready; needs the user's token |
+| MCP Tasks UI | alexa-sim Developer view → "Watch my sale as a task" | Done, checked in Chrome |
+| Architecture diagram | `docs/architecture.svg` + `.png` | Done (solid = running, dashed = AWS pending) |
+| Devpost draft | `docs/SUBMISSION.md` | Drafted; TODOs listed at the top |
+| OSS: Ring starter media helpers | `oss/ring-api-helloworld` | **PR open:** AmazonAppDev/ring-api-helloworld#36 (issue #35) |
+| OSS: `proof-of-handoff` (renamed from `@stoop/…`) | `packages/proof-of-handoff` | Publish-ready (tarball tested in a clean dir); **the user publishes** |
+| Fire TV Garage Mode | `apps/firetv` | Web target works; Android TV emulator deferred (user decides later) |
+| AgentCore Runtime / Memory, hosting | – | Waiting for activation; see §6 |
 
-**Run it locally:**
-```
-pnpm i
-pnpm demo
-```
-- Seller sim: http://localhost:5180/?role=seller
-- Buyer sim: http://localhost:5180/?role=buyer
-- Pass: http://localhost:5182
-- Ops: http://localhost:5183
-- `docs/DEMO_SCRIPT.md` has the 3-minute flow.
-
-## 6. Work queue (do in order; each item has a definition of done)
+## 6. Work queue
 
 ### P0: no user input needed
-
-**1. Finish Fire TV Garage Mode** (`apps/firetv`, Amazon's `react-native-multi-tv-app-sample`, MIT-0)
-
-What's written:
-- `packages/shared-ui/src/stoop/api.ts`: a stateless MCP JSON-RPC client. Defaults are `10.0.2.2:8787` on Android and `localhost:8787` on web. Overridable with `EXPO_PUBLIC_STOOP_URL` and `EXPO_PUBLIC_STOOP_SELLER_TOKEN`.
-- `screens/GarageScreen.tsx`:
-  - Item grid driven by the D-pad; select toggles an item.
-  - "List selected" calls `list_items`, gets `approval_required`, shows an on-screen confirm modal, then sends `confirm_action`.
-  - The footer shows the line from `handoff_status`, polled every 4 s.
-  - "Use demo photos" calls `/sweep/demo` and then `appraise_photos`.
-- Drawer reduced to Garage + Settings; Stoop palette in `theme/colors.ts`.
-- The stack allows the origin `http://localhost:8082`.
-
-Steps:
-1. `cd apps/firetv`, then `corepack yarn install`. This creates `node_modules` on E:, which is fine.
-2. `corepack yarn typecheck`, and fix the errors. Likely spots:
-   - `DrawerNavigator.tsx` after the route removal.
-   - Unused movie screens that reference old routes. Delete Home/Explore/TV/Details/Player screens and their exports if they get in the way.
-3. Run it on the web target with the stack running: `corepack yarn dev:web` serves port 8082. Open it in the browser pane, then:
-   - Drive it with the arrow keys and Enter.
-   - Check the focus ring, the demo-photo flow, the confirm modal, the listing, and the live-sale line.
-   - Check for console errors.
-4. Set `app.json` name/slug/package to "Stoop Garage" / `com.stoop.garage`.
-5. Optionally replace the sample's banner icons with a plain Stoop wordmark PNG.
-6. Add `apps/firetv/README.md`: attribution to the sample (MIT-0), how to run, and that it is an MCP client.
-7. **Android TV emulator: ask the user first.** No TV system image is installed. Installing one (for example `system-images;android-34;android-tv;x86`) is about 1.5 GB into the SDK on C:, which has about 11 GB free. The first Gradle build adds about 2 GB; set `GRADLE_USER_HOME=E:\gradle`.
-   - With a yes: create an AVD with `ANDROID_AVD_HOME` on E:, run `corepack yarn dev:android`, and screenshot the result.
-8. Done when: it typechecks, the web target works end to end against the local stack, docs are updated, and it's committed.
-
-**2. Test `my_items`**
-- It's a new read-only seller tool in `services/mcp-server/src/seller.ts`, with no test yet.
-- Add an e2e case in `services/stack/test/`:
-  - Empty household: spoken "Nothing appraised yet".
-  - After the sweep + `appraise_photos`: items with prices and the blocked crib.
-  - After `list_items`: `listingState: "LIVE"`.
-- Also call it statelessly.
-
-**3. Docs sync**
-- `docs/AWS_BUILDER.md`: the Kiro row says "planned", but the spec now exists. Mark the spec as written and say what was spec-first.
-- `README.md`: test count, plus a Fire TV section.
-- `docs/ARCHITECTURE.md`: `my_items`, `apps/firetv`.
-- `skills/stoop/SKILL.md`: `my_items` ("what am I selling?").
-- `docs/FRICTION_LOG.md`: add a row whenever the RN/Expo/Yarn setup fights you. These are worth bonus points.
-
-**4. UI QA pass** (the judged surfaces)
-- Use the browser pane at 1280×800 and at 390 px width for:
-  - alexa-sim (seller and buyer)
-  - pass
-  - ops
-- Run through `docs/DEMO_SCRIPT.md` once on each.
-- Capture console errors; fix layout breaks, focus order, and contrast.
-- Check the design bar from §3 and the plan's §8 Alexa+ add-on design rules:
-  - glanceable cards
-  - ≤ 5 voice options
-  - no JSON or ids shown to customers outside the Developer view
-
-**5. Recording tool for the video** (`tools/record-demo`)
-- A Playwright `recordVideo` script that drives the golden path across the seller sim, buyer sim, pass and ops at 1280×800, and saves the clips.
-- The reference pattern is `E:\Winter\bharat\submission\record-scrapform.mjs`.
-- Playwright's Chromium download is about 150 MB on C:. Mention it to the user before installing.
-
-**6. Optional, if time:** show `watch_handoff` task progress in the alexa-sim Developer view.
-- The sim's MCP client sends `tools/call` with `params.task`, then polls `tasks/get`.
-- This makes the Tasks feature visible in the video.
+1. **When the red team finishes:** commit `evals/REPORT.md` + `evals/results/redteam.json`; put the naive-agent number in README, `docs/AWS_BUILDER.md`, `docs/SUBMISSION.md`, `docs/DEMO_SCRIPT.md` (the 2:40 benchmark line).
+2. **Rewrite `docs/AWS_BUILDER.md` statuses** to today's truth (Bedrock running; adapters + CDK written; deploy blocked by activation; address boundary).
+3. **Update `docs/DEMO_SCRIPT.md`:** the Tasks panel moment, live Bedrock mode, restart the stack before recording.
+4. **Wire the stack to AWS** behind a flag (`compose.ts`: DynamoStore, KMS signer/MAC/vault, `lambdaBoundary`, `StepFunctionsScheduler` + `pollJobs`, reading `infra/outputs.json`). Not written yet; do it before deploying so the first deploy can be tested end to end.
 
 ### P1: blocked on the user (ask; never work around it)
-
-**AWS** (the user excluded it until they sign in):
-1. The user runs `aws login`.
-2. Then `aws sts get-caller-identity` and a Converse ping on `us.amazon.nova-2-lite-v1:0` in us-east-1.
-3. File the Service Quotas increase.
-4. Then build:
-   - `infra/` CDK `StoopStack`: KMS sign/MAC/vault keys, DynamoDB single table, a Settlement Lambda with the **only** vault-decrypt grant, API Gateway, a Step Functions Standard saga (Wait + `TimestampPath`).
-   - The KMS `MacProvider`, `Signer` (`MessageType=DIGEST` + `derToRawP256`), DynamoDB `Store`/`SpentTokenStore` (Kiro tasks 7–10), and the AgentCore Runtime deploy for the Strands agents.
-5. Then:
-   - `LLM_MODE=bedrock pnpm eval:redteam` for the naive baseline. This produces the headline "naive agent leaked X%" stat.
-   - Update `docs/AWS_BUILDER.md` statuses.
-
-**Ring:** the user pastes a Playground token (`RING_ACCESS_TOKEN`). Then:
-- Run with `FRAME_SOURCE=ring`.
-- Get one real snapshot via the 303 flow, plus a WHEP live tile in Ops.
-- Add friction-log entries for anything that doesn't work.
-
-**GitHub:**
-- The public repo `hash066/stoop` needs permission. Then CI runs.
-- Add the repo URL and the "Try it in 60 seconds" instructions to the README.
-
-**OSS PR** to `AmazonAppDev/ring-api-helloworld`:
-- Needs permission to fork and open.
-- The PR body is in `oss/ring-api-helloworld/PR_DESCRIPTION.md`. It references the existing PRs #31 and #32.
-
-**npm:** publishing `proof-of-handoff` needs permission.
-
-**Assets from the team:**
-- Real porch footage: about 15 before/after pairs plus 3 handoff clips. They go in `fixtures/footage/`; see `fixtures/README.md`.
-- Real item photos.
-- One real human story (a Marketplace no-show or stranger-at-the-door). Never invent one; use a labelled persona if none exists.
+- **AWS activation.** The user checks the console/billing for a pending verification step or contacts AWS Support. Then: `pnpm --filter @stoop/infra exec cdk bootstrap aws://428516841578/us-east-1 --profile stoop`, `pnpm --filter @stoop/infra deploy`, an integration run against real AWS, and the video shot: `aws kms decrypt` on an address as root → AccessDenied.
+- **Hosting in us-east-1** (EC2 + CloudFront, or AgentCore for the agents) once EC2 activates. Then the Negotiator on AgentCore Runtime with tools calling Settlement over HTTP, AgentCore Observability screenshots, and a judge URL in the README.
+- **npm:** the user runs `npm login`, then `pnpm --filter proof-of-handoff publish --no-git-checks` (the `prepack` builds `dist/`). Afterwards add the npm link to README and SUBMISSION.
+- **Ring:** the user gets a Playground token (30-minute lifetime). Procedure: restart the stack with `FRAME_SOURCE=ring`; the user pastes the token in Ops (localhost:5183) → Connect → **Snapshot** (real 303 flow) → **Use for pickups** → **Live view** (WHEP). Log what breaks in the friction log.
+- **Assets:** porch footage (~15 before/after pairs + 3 handoff clips → `fixtures/footage/`), real item photos, the real story (or approval of a labelled persona), a narrator.
+- **Fire TV emulator** (1.5 GB on C:): the user decides "depending on the updates".
 
 ### P2: submission (Wed–Fri)
+- Resolve the TODOs in `docs/SUBMISSION.md`; video ≤ 3:00 (public YouTube, captions, no third-party logos or music, simulations labelled); thumbnails.
+- Final pass on `FRICTION_LOG.md` (18 entries) and `PRODUCT_FEEDBACK.md`.
+- Fresh-clone check: `git clone … && corepack enable && pnpm install && pnpm demo` on Windows in under 10 minutes.
 
-- Devpost text, in this order: problem, product, how it works, real vs simulated, architecture, evals.
-- Video ≤ 3:00 per plan §3: public YouTube, English captions, no third-party logos or music, simulations labelled.
-- Thumbnails, and an architecture diagram export.
-- Final pass on `FRICTION_LOG.md` and `PRODUCT_FEEDBACK.md`. Every tool used needs an entry: MCP SDK, MCP Apps, Ring, Strands, AgentCore, Bedrock, Kiro, and RN TV if shipped.
-- Fresh-clone check: `pnpm i && pnpm demo` works from the README in under 10 minutes on Windows.
-
-**Cut order if time slips:** Fire TV → Tasks UI polish → AgentCore Memory (keep the local twin) → live eBay comps → evidence MP4 clips (frames only) → Ops polish.
+**Cut order if time slips:** Fire TV → AgentCore Memory (keep the local twin) → live eBay comps → evidence MP4 clips (frames only) → Ops polish.
 
 ## 7. Verification commands
 
@@ -278,13 +164,13 @@ $job = Start-Job -ScriptBlock { Set-Location E:\Winter\stoop; pnpm typecheck 2>&
 if (Wait-Job $job -Timeout 500) { Receive-Job $job } else { Stop-Job $job; 'TIMED OUT' }; Remove-Job $job -Force
 pnpm eval:redteam; pnpm eval:poh          # offline evals -> evals/REPORT.md, evals/POH_REPORT.md
 pnpm ring-sim replay                      # against a running stack: 200, duplicate, 401, 401
+pnpm qa                                   # browser QA of every surface (needs pnpm demo running)
 ```
 
-## 8. Open questions for the user (ask, don't assume)
+## 8. Open questions for the user
 
-1. OK to download the Android TV system image (about 1.5 GB on C:) and build for the emulator?
-2. When will you run `aws login` for the AWS phase? Is Bedrock model access enabled on the account?
-3. OK to create the public GitHub repo `hash066/stoop` now?
-4. OK to fork `ring-api-helloworld` and open the media-helpers PR, and to publish `proof-of-handoff` to npm?
-5. Do you have a Ring Developer account and a Playground token?
-6. When will the footage, photos and the real story arrive?
+1. AWS: can you see why activation is pending (billing or verification step in the console)? Otherwise, open an AWS Support case.
+2. npm: please run `npm login`, then `pnpm --filter proof-of-handoff publish --no-git-checks`.
+3. Ring: when you have a Playground token, say so; the run takes about 10 minutes of the token's 30.
+4. When will the footage, photos, story and narrator arrive?
+5. Fire TV emulator: yes or no (deferred by the user on Oct 17).
