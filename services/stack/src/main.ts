@@ -2,6 +2,7 @@
 import { serve } from "@hono/node-server";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadAwsWiring } from "@stoop/settlement/aws";
 import { createStack, DEMO } from "./compose.ts";
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
@@ -23,11 +24,13 @@ const stack = await createStack({
   frameSource: process.env.FRAME_SOURCE === "ring" ? "ring" : "footage",
   ringHmacKey: process.env.RING_WEBHOOK_HMAC_KEY,
   simulatorKey: process.env.RING_SIMULATOR_KEY || undefined,
+  // STOOP_AWS_OUTPUTS=infra/outputs.json (from `pnpm --filter @stoop/infra deploy`): run Settlement on AWS
+  aws: process.env.STOOP_AWS_OUTPUTS ? loadAwsWiring(resolve(root, process.env.STOOP_AWS_OUTPUTS)) : undefined,
 });
 
 serve({ fetch: stack.app.fetch, port, hostname: "127.0.0.1" }, () => {
   const line = "─".repeat(64);
-  console.log(`\n${line}\n Stoop local stack  ${publicBaseUrl}   (LLM_MODE=${process.env.LLM_MODE ?? "offline"})\n${line}`);
+  console.log(`\n${line}\n Stoop local stack  ${publicBaseUrl}   (LLM_MODE=${process.env.LLM_MODE ?? "offline"}, infra=${process.env.STOOP_AWS_OUTPUTS ? "AWS" : "local twins"})\n${line}`);
   console.log(` MCP seller  ${publicBaseUrl}/mcp/seller   Bearer ${DEMO.sellerToken}`);
   console.log(` MCP buyer   ${publicBaseUrl}/mcp/buyer    Bearer ${DEMO.buyers[0]!.token}`);
   console.log(` UCP         ${publicBaseUrl}/ucp/checkout-sessions   (.well-known/ucp)`);

@@ -114,7 +114,7 @@
 ## 5. Current state (verified Oct 17, 22:30 IST)
 
 - **Public repo:** https://github.com/hash066/stoop (MIT). CI (`.github/workflows/ci.yml`) is green on every push: typecheck, all tests, offline evals, the OSS helper tests.
-- `pnpm typecheck` is clean and the suite is **201 tests**: receipts 6, policy 86, ring-bridge 8, settlement + UCP + AWS adapters 50, verifier 5, ring-sim 3, agents 24, MCP end-to-end 19.
+- `pnpm typecheck` is clean and the suite is **203 tests**: receipts 6, policy 86, ring-bridge 8, settlement + UCP + AWS adapters 52, verifier 5, ring-sim 3, agents 24, MCP end-to-end 19.
 - **Live Bedrock golden path verified:** appraise → list → haggle (incl. an injection attempt) → $95 → hold → doorbell → VERIFIED → receipt VALID, 18.6 s from India (each negotiator turn ~3.5 s for about two model calls; Bedrock itself answers in ~0.7 s per call, the rest is the network from India). Found and fixed: SVG placeholders sent to Bedrock broke the appraisal.
 - **Red team on live Bedrock:** see `evals/REPORT.md` (Nova 2 Lite; includes the naive baseline).
 
@@ -139,7 +139,7 @@
 1. **When the red team finishes:** commit `evals/REPORT.md` + `evals/results/redteam.json`; put the naive-agent number in README, `docs/AWS_BUILDER.md`, `docs/SUBMISSION.md`, `docs/DEMO_SCRIPT.md` (the 2:40 benchmark line).
 2. **Rewrite `docs/AWS_BUILDER.md` statuses** to today's truth (Bedrock running; adapters + CDK written; deploy blocked by activation; address boundary).
 3. **Update `docs/DEMO_SCRIPT.md`:** the Tasks panel moment, live Bedrock mode, restart the stack before recording.
-4. **Wire the stack to AWS** behind a flag (`compose.ts`: DynamoStore, KMS signer/MAC/vault, `lambdaBoundary`, `StepFunctionsScheduler` + `pollJobs`, reading `infra/outputs.json`). Not written yet; do it before deploying so the first deploy can be tested end to end.
+4. ~~Wire the stack to AWS~~ **Done:** `STOOP_AWS_OUTPUTS=infra/outputs.json pnpm stack` runs Settlement on DynamoDB, KMS, the Vault Lambda and Step Functions → SQS (`awsSettlementDeps` in `services/settlement/src/aws/wiring.ts`); Ops shows a "settlement: AWS" chip. Unit-tested; first real run happens after the deploy.
 
 ### P1: blocked on the user (ask; never work around it)
 - **AWS activation.** The user checks the console/billing for a pending verification step or contacts AWS Support. Then: `pnpm --filter @stoop/infra exec cdk bootstrap aws://428516841578/us-east-1 --profile stoop`, `pnpm --filter @stoop/infra deploy`, an integration run against real AWS, and the video shot: `aws kms decrypt` on an address as root → AccessDenied.

@@ -212,3 +212,36 @@ describe("lambdaBoundary (host side)", () => {
     });
   });
 });
+
+describe("AWS wiring from the StoopStack outputs", () => {
+  const outputs = {
+    StoopStack: {
+      TableName: "stoop",
+      ReceiptKeyArn: "arn:aws:kms:us-east-1:111122223333:key/r",
+      TokenMacKeyArn: "arn:aws:kms:us-east-1:111122223333:key/m",
+      AddressKeyArn: "arn:aws:kms:us-east-1:111122223333:key/a",
+      VaultFunctionName: "stoop-vault",
+      StateMachineArn: "arn:aws:states:us-east-1:111122223333:stateMachine:stoop-handoff-saga",
+      JobQueueUrl: "https://sqs.us-east-1.amazonaws.com/111122223333/stoop-jobs",
+      HostRoleArn: "arn:aws:iam::111122223333:role/StoopHostRole",
+    },
+  };
+
+  it("parses cdk --outputs-file JSON, takes the region from the ARN, and names a missing output", async () => {
+    const { parseAwsWiring } = await import("../src/aws/index.ts");
+    const w = parseAwsWiring(JSON.stringify(outputs));
+    expect(w).toMatchObject({ region: "us-east-1", tableName: "stoop", vaultFunctionName: "stoop-vault" });
+    const { TableName: _, ...partial } = outputs.StoopStack;
+    expect(() => parseAwsWiring(JSON.stringify({ StoopStack: partial }))).toThrow(/TableName is missing/);
+  });
+
+  it("builds the AWS twin for every Settlement dependency", async () => {
+    const { awsSettlementDeps, parseAwsWiring } = await import("../src/aws/index.ts");
+    const d = awsSettlementDeps(parseAwsWiring(JSON.stringify(outputs)));
+    expect(d.store).toBeInstanceOf(DynamoStore);
+    expect(d.spent).toBeInstanceOf(DynamoSpentTokenStore);
+    expect(d.scheduler).toBeInstanceOf(StepFunctionsScheduler);
+    expect(d.signer.kid).toMatch(/^kms-/);
+    expect(typeof d.boundary.revealForPass).toBe("function");
+  });
+});

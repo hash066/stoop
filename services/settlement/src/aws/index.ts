@@ -3,3 +3,4 @@ export * from "./dynamo.ts";
 export * from "./kms.ts";
 export * from "./scheduler.ts";
 export { lambdaBoundary, type VaultRequest, type VaultResponse } from "./vault-lambda.ts";
+export * from "./wiring.ts";

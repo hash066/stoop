@@ -145,6 +145,7 @@ function App() {
           <Chip k="payments" v={state?.psp ?? "–"} />
           <Chip k="camera" v={state?.frameSource === "our_footage" ? "our footage / simulator" : state?.frameSource ?? "–"} />
           <Chip k="Ring API" v={state?.ringConfigured ? "token set" : "no token"} />
+          <Chip k="settlement" v={state?.infra === "aws" ? "AWS: DynamoDB, KMS, Step Functions" : state ? "local twins" : "–"} />
         </div>
       </header>
 

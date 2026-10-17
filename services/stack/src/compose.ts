@@ -24,7 +24,9 @@ import {
   ucpRouter,
   type Clock,
   type ScheduledJob,
+  type Scheduler,
 } from "@stoop/settlement";
+import { awsSettlementDeps, type AwsWiring } from "@stoop/settlement/aws";
 import { BedrockVision, LabelVision, Verifier } from "@stoop/verifier";
 import { LocalPhotoStore, LocalPreferenceMemory } from "./memory.ts";
 import { NotificationHub } from "./notifications.ts";
@@ -52,6 +54,8 @@ export interface StackConfig {
   persistKeys?: boolean;
   /** Seed the demo household, buyers and photos. */
   seedDemo?: boolean;
+  /** StoopStack outputs: run Settlement on DynamoDB, KMS, the Vault Lambda and Step Functions. */
+  aws?: AwsWiring;
 }
 
 export const DEMO = {
@@ -66,29 +70,36 @@ export const DEMO = {
 
 export async function createStack(cfg: StackConfig) {
   const clock = cfg.clock ?? systemClock;
-  const store = new MemoryStore();
+  const aws = cfg.aws ? awsSettlementDeps(cfg.aws) : undefined;
+  const store = aws?.store ?? new MemoryStore();
   const bus = new EventBus();
-  const scheduler = new TickScheduler();
+  // Locally a tick drives saga jobs; in AWS, Step Functions delivers them through SQS (startJobs below)
+  const tickScheduler = new TickScheduler();
+  const scheduler: Scheduler = aws?.scheduler ?? tickScheduler;
+  const runDue = (now: number) => (aws ? Promise.resolve(0) : tickScheduler.runDue(now));
   const psp = new SandboxPSP();
   const dataDir = join(cfg.rootDir, ".data");
-  const signer = localSigner({ kid: "stoop-local-1", privateKeyPem: cfg.persistKeys ? loadOrCreateKey(join(dataDir, "receipt-signing-key.pem")) : undefined });
+  const signer =
+    aws?.signer ?? localSigner({ kid: "stoop-local-1", privateKeyPem: cfg.persistKeys ? loadOrCreateKey(join(dataDir, "receipt-signing-key.pem")) : undefined });
   const ringHmacKey = cfg.ringHmacKey ?? randomBytes(16).toString("hex");
   const simulatorKey = cfg.simulatorKey ?? "stoop-simulator-key-not-ring";
 
   const settlement = new Settlement({
     store,
     psp,
-    macp: localHmacProvider(process.env.LOCAL_TOKEN_MAC_KEY ?? randomBytes(32)),
-    spent: memorySpentStore(),
+    macp: aws?.macp ?? localHmacProvider(process.env.LOCAL_TOKEN_MAC_KEY ?? randomBytes(32)),
+    spent: aws?.spent ?? memorySpentStore(),
     signer,
-    vault: localVault(process.env.LOCAL_VAULT_KEY ?? randomBytes(32).toString("hex")),
+    vault: aws?.vault ?? localVault(process.env.LOCAL_VAULT_KEY ?? randomBytes(32).toString("hex")),
+    boundary: aws?.boundary,
     clock,
     bus,
     scheduler,
     passBaseUrl: cfg.passBaseUrl,
-    issuer: "stoop-settlement-local",
+    issuer: aws ? "stoop-settlement" : "stoop-settlement-local",
   });
-  scheduler.onFire((j) => settlement.onJob(j));
+  tickScheduler.onFire((j) => settlement.onJob(j));
+  const stopJobs = aws?.startJobs((j) => settlement.onJob(j));
 
   // ---------- frames, vision, verifier
   const footage = new FootageSource(join(cfg.rootDir, "fixtures", "footage"), loadFootageIndex(join(cfg.rootDir, "fixtures", "footage")));
@@ -155,7 +166,7 @@ export async function createStack(cfg: StackConfig) {
       }
       const len = ((p?.toHour ?? 20) - (p?.fromHour ?? 18)) * 3600_000 || 2 * 3600_000;
       await settlement.issuePass(deal.id, { start, end: start + Math.min(len, 2 * 3600_000) }, "agent:marshal");
-      await scheduler.runDue(clock.now());
+      await runDue(clock.now());
     })().catch((err) => bus.emit({ type: "marshal_error", at: clock.now(), dealId: e.dealId, error: String(err) }));
   });
 
@@ -284,7 +295,7 @@ export async function createStack(cfg: StackConfig) {
   app.get("/pass/:id", async (c) => c.json(await settlement.passView(c.req.param("id"), device(c.req.header("X-Stoop-Device")))));
   app.post("/pass/:id/checkin", async (c) => {
     const d = await settlement.checkIn(c.req.param("id"), device(c.req.header("X-Stoop-Device")));
-    await scheduler.runDue(clock.now());
+    await runDue(clock.now());
     return c.json({ state: d.state });
   });
   app.post("/pass/:id/outcome", async (c) => {
@@ -335,6 +346,7 @@ export async function createStack(cfg: StackConfig) {
       appraiser: appraiser.identifierName,
       psp: psp.label,
       frameSource: frames.name,
+      infra: aws ? "aws" : "local",
       ringConfigured: !!ringToken,
       listings,
       deals,
@@ -456,7 +468,7 @@ export async function createStack(cfg: StackConfig) {
       return c.json({ scenario: name, log });
     }
     if (!deal) return c.json({ error: "no_active_deal", message: "Get a deal to the pickup window first" }, 409);
-    await scheduler.runDue(clock.now());
+    await runDue(clock.now());
     const fresh = await settlement.getDeal(deal.id);
     const passId = fresh.passId!;
     const dev = "sim-device-0001";
@@ -543,7 +555,7 @@ export async function createStack(cfg: StackConfig) {
   }
 
   let timer: NodeJS.Timeout | undefined;
-  if (cfg.autoTick) timer = setInterval(() => void scheduler.runDue(clock.now()), 1000);
+  if (cfg.autoTick && !aws) timer = setInterval(() => void runDue(clock.now()), 1000);
 
   return {
     app,
@@ -560,8 +572,11 @@ export async function createStack(cfg: StackConfig) {
     buyers,
     simulatorKey,
     ringHmacKey,
-    tick: () => scheduler.runDue(clock.now()),
-    stop: () => timer && clearInterval(timer),
+    tick: () => runDue(clock.now()),
+    stop: () => {
+      if (timer) clearInterval(timer);
+      stopJobs?.();
+    },
   };
 }
 
