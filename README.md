@@ -9,7 +9,7 @@ Stoop is an **Alexa+ add-on** (MCP server + MCP Apps cards) and a **Ring Appstor
 - The buyer pays through an Alexa+-style checkout. **The money is held, not charged.**
 - The buyer picks the item up off your porch. **Your Ring doorbell provides the proof of handoff**: check-in, doorbell event, item there before and gone after. Only then is the money released, with a signed receipt anyone can verify.
 
-**The AI never holds the keys.** Money, your address and receipts are controlled by a separate Settlement service under deterministic rules. In a 300-attack red team the selling agent leaked the address **0 times**, because it never had it.
+**The AI never holds the keys.** Money, your address and receipts are controlled by a separate Settlement service under deterministic rules. In a 300-attack red team on Amazon Bedrock (Nova 2 Lite), a naive agent with the address in its prompt leaked it **57 times (19%)**; Stoop's agent leaked it **0 times**, because it never had it ([`evals/REPORT.md`](evals/REPORT.md)).
 
 ![Stoop architecture](docs/architecture.png)
 

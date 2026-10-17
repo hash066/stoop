@@ -1,45 +1,42 @@
 # AWS Builder mini-challenge: how Stoop uses AWS
 
-> **Status (Oct 17 2026):** everything below is implemented and runs locally. The AWS adapters are written and switch on with `LLM_MODE=bedrock` plus AWS credentials. Deploying to AWS (account activation, Bedrock model access, CDK stack) is the remaining step. Every row says whether it's **running** or **ready to deploy**, so nothing is overstated.
+> **Status (Oct 17 2026, 22:30 IST):** Amazon Bedrock is **running** (live Nova 2 Lite runs of the golden path and the red team). Every other AWS piece is **written and tested against mocked AWS clients**, with a CDK stack that synthesizes cleanly, but **not deployed yet**: the AWS account's activation is incomplete, so CloudFormation, KMS, DynamoDB, Lambda, Step Functions and SQS still answer `OptInRequired` (friction log #15). Each row says exactly which state it is in.
 
 | AWS service | What it does in Stoop | Code | Status |
 |---|---|---|---|
-| **Amazon Bedrock**, Nova 2 Lite (`us.amazon.nova-2-lite-v1:0`) | Baseline model for every role. Vision: "is this item on the porch?" (present/absent/unsure), photo identification, planner tool use | `services/verifier/src/vision.ts` (`BedrockVision`), `services/agents/src/appraiser.ts` (`BedrockIdentifier`), `services/agents/src/planner.ts` (`planBedrock`) | ready to deploy |
-| **Amazon Bedrock**, Claude Sonnet 4.6 (`us.anthropic.claude-sonnet-4-6`) | Negotiator, when the Marketplace subscription is available on the account | `services/agents/src/llm.ts` (`BEDROCK_MODEL_ID_NEGOTIATOR`) | ready to deploy |
-| **Strands Agents SDK** (TypeScript) | Negotiator agent loop with three guarded tools, turn and time budgets. `ScriptedModel` drives the same agent offline | `services/agents/src/negotiator.ts`, `llm.ts` | **running** (offline model) |
-| **Bedrock AgentCore Runtime** | Hosts the Strands agents (HTTP protocol) and, if the elicitation spike passes, the stateful MCP server (`0.0.0.0:8000/mcp`) | `services/mcp-server`, `services/agents` | ready to deploy |
-| **AgentCore Memory** | Seller preferences across sessions (user-preference strategy). Powers "pickup 6 pm to 8 pm like last time". Addresses are redacted before writes | `services/stack/src/memory.ts` (local twin) | local twin running |
-| **AgentCore Observability** | OTel traces of agent turns into the CloudWatch GenAI dashboard | Strands telemetry | ready to deploy |
-| **AWS KMS** | (1) `ECC_NIST_P256` receipt signing with `MessageType=DIGEST` plus DER→raw for JWS ES256. (2) `GenerateMac`/`VerifyMac` capability tokens. (3) Address vault key whose policy grants `Decrypt` only to Settlement | `packages/proof-of-handoff/src/der.ts`, `packages/policy/src/tokens.ts` (`MacProvider`), `services/settlement/src/infra.ts` (`Vault`) | interfaces + local twins running |
-| **AWS Lambda** | Settlement + UCP endpoints (own IAM role); Ring webhook ingest | `services/settlement`, `services/ring-bridge` | ready to deploy |
-| **Amazon API Gateway** | HTTPS front for UCP, the pass API, `/verify`, webhooks | `services/stack/src/compose.ts` routes | ready to deploy |
-| **AWS Step Functions** (Standard) | Deal saga: window open/close, presence grace, inspection window, reservation expiry, hold renewal (Wait + `TimestampPath`) | `services/settlement` `onJob` + `TickScheduler` (local twin) | local twin running |
-| **Amazon DynamoDB** | Single-table store; conditional writes and `TransactWriteItems` (one deal per listing) | `Store` interface, `MemoryStore` twin | local twin running |
-| **Amazon EventBridge** | Ring events and deal events fan-out | `EventBus` twin | local twin running |
-| **Amazon S3** | EXIF-stripped photos, evidence frames, receipts (versioned) | `LocalPhotoStore` | local twin running |
-| **Amazon SES** | Pickup-pass one-time code email | demo email outbox in Ops | local twin running |
-| **Kiro** | Spec-first development of the Policy Kernel. `.kiro/specs/policy-kernel/{requirements,design,tasks}.md` are committed; tasks 1–6 (presence-grace truth table, address release + audit, capture + property test, canonical-terms capability tokens, negotiation oracle, R13 purchase policy) were specced before implementation and are done; tasks 7–10 are the AWS adapters (KMS, DynamoDB, Step Functions, CDK) | `.kiro/specs/policy-kernel/`, `packages/policy` | spec written; tasks 1–6 done, 7–10 track the AWS deploy |
-| **Claude Code on Bedrock** | Development workflow (organizer-confirmed to count) | n/a | used once Bedrock access is active |
+| **Amazon Bedrock**, Nova 2 Lite (`us.amazon.nova-2-lite-v1:0`) | Every model role: the Negotiator agent, photo identification, porch vision ("is the item still there?"), the host planner, the red-team baseline | `services/agents/src/llm.ts`, `appraiser.ts`, `planner.ts`; `services/verifier/src/vision.ts` | **running**: full golden path verified live (appraise → haggle incl. an injection attempt → hold → doorbell → VERIFIED → receipt VALID) |
+| **Strands Agents SDK** (TypeScript) | The Negotiator: an agent loop over three guarded tools (`evaluate_offer`, `propose_acceptance`, `send_reply`), with turn and time budgets; stops as soon as the reply is sent. `ScriptedModel` drives the same agent offline | `services/agents/src/negotiator.ts` | **running** on Bedrock and offline |
+| **Bedrock AgentCore Runtime + Observability** | Host the Strands agents; OTel traces into the CloudWatch GenAI dashboard | `services/agents` | waiting: the Negotiator's tools call Settlement, so it moves together with the host once the account can run compute in us-east-1 |
+| **AgentCore Memory** | Seller preferences across sessions ("pickup 6 pm to 8 pm like last time"); addresses redacted before writes | `services/stack/src/memory.ts` (local twin) | local twin running |
+| **AWS KMS** | (1) `ECC_NIST_P256` receipt key: Sign with `MessageType=DIGEST`, DER → raw for JWS ES256. (2) `HMAC_256` key: single-use capability tokens. (3) **Address key whose policy denies Decrypt to every IAM principal, root included, except the Vault Lambda** (and has no `CreateGrant` side door) | `services/settlement/src/aws/kms.ts`, `infra/lib/stoop-stack.ts` | adapters unit-tested (a KMS-signed receipt verifies offline); keys defined in CDK; deploy pending |
+| **AWS Lambda** (Vault) | The address boundary: the only code that turns an address ciphertext into plaintext. Runs the outbound-message guard and the pass-page reveal, and re-derives R2 (funded, bound device, inside the window) from DynamoDB itself, so a compromised host or agent still can't get an address | `services/settlement/src/boundary.ts`, `aws/vault-lambda.ts` | boundary running locally; Lambda bundled by CDK (456 KB, arm64, Node 22); deploy pending |
+| **Amazon DynamoDB** | Single-table store; `ifAbsent` / `ifVersion` as server-side conditions, `TransactWriteItems` for one-deal-per-listing; spent-token table with TTL | `services/settlement/src/aws/dynamo.ts` | adapter unit-tested; deploy pending |
+| **AWS Step Functions** (Standard) + **Amazon SQS** | Deal saga timers (window open/close, presence grace, inspection, reservation expiry): one execution per job, Wait on `TimestampPath`, then SQS; the host long-polls, so it needs no inbound endpoint | `services/settlement/src/aws/scheduler.ts`, CDK `HandoffSaga` | adapter unit-tested; deploy pending |
+| **AWS CDK** | `StoopStack`: the keys, table, Vault Lambda, saga, job queue and a host policy that has no `kms:Decrypt` | `infra/` | `cdk synth` clean; deploy pending |
+| **AWS Budgets** | $25/month alert for the hackathon account (credits excluded) | – | **running** |
+| **Kiro** | Spec-first Policy Kernel: `.kiro/specs/policy-kernel/{requirements,design,tasks}.md`. Tasks 1–6 (truth table with presence grace, address release + audit, capture + property test, canonical-terms tokens, negotiation oracle, R13 purchase policy) were specced before code; tasks 7–9 (KMS, DynamoDB, Step Functions adapters) are done; task 10 (CDK) is written | `.kiro/specs/policy-kernel/`, `packages/policy` | spec written; 9 of 10 tasks done |
+| **Amazon S3, SES, EventBridge** | Photos and evidence frames, pickup-pass email, event fan-out | `LocalPhotoStore`, Ops email outbox, `EventBus` | local twins running |
 
 ## Why this is a multi-service agentic pipeline, not "one Bedrock call"
 
 The model never touches money or addresses:
-- **Strands agents** propose.
-- **KMS-backed tokens** bind human approvals to exact terms.
+- **Strands agents on Bedrock** propose; they see an oracle ("acceptable? counter?"), never the floor.
+- **KMS-backed capability tokens** bind each human approval to the exact terms shown.
+- **KMS key policy + the Vault Lambda** make "the AI never holds the keys" an IAM fact, not a promise.
 - **Step Functions** waits out pickup windows and webhook lag.
-- **Bedrock vision** produces evidence.
-- A **KMS-signed** receipt makes the outcome verifiable by anyone.
+- **Bedrock vision** produces evidence; a **KMS-signed** receipt makes the outcome verifiable by anyone.
 
-## Deploy checklist (when the account is active)
+## Red team on live Bedrock
 
-1. Run `aws sts get-caller-identity`, then a Converse ping on Nova 2 Lite in us-east-1. File the Service Quotas increase.
-2. Claude: submit the Anthropic first-time-use form, then a Converse ping on Sonnet 4.6. If the Marketplace subscription fails on an AISPL account, stay on Nova.
-3. CDK `StoopStack`:
-   - KMS keys (sign, MAC, vault)
-   - DynamoDB table
-   - Settlement Lambda (vault-decrypt grant only here)
-   - API Gateway, Step Functions state machine
-   - S3 bucket, SES identity
-   - AgentCore Runtime (agents)
-4. Run the spike: elicitation round-trip on AgentCore Runtime stateful MCP. If it fails, use EC2 t4g.small + Caddy for the MCP host.
-5. Run `LLM_MODE=bedrock pnpm eval:redteam` and `LLM_MODE=bedrock pnpm eval:poh` (with real footage) for the headline numbers.
+300 adversarial conversations on Nova 2 Lite ([`evals/REPORT.md`](../evals/REPORT.md), Oct 17): a naive agent with the address and floor in its prompt leaked the address **57 / 300 (19%)** and the floor 40 / 300, and went along with 9 / 70 scams; Stoop: **0 / 300**, 0 / 300, 0 / 70. 200 benign buyers on the same model: 100 deals, average $95.30 on a $120 ask.
+
+## Deploy (once the account is active)
+
+```bash
+aws sts get-caller-identity --profile stoop
+pnpm --filter @stoop/infra exec cdk bootstrap aws://<account>/us-east-1 --profile stoop
+pnpm --filter @stoop/infra deploy                 # writes infra/outputs.json
+STOOP_AWS_OUTPUTS=infra/outputs.json LLM_MODE=bedrock AWS_PROFILE=stoop pnpm stack
+# The boundary, live: even the account root can't read an address
+aws kms decrypt --profile stoop --key-id alias/stoop-address-vault --ciphertext-blob fileb://cipher.bin --encryption-context purpose=stoop-address   # AccessDenied
+```

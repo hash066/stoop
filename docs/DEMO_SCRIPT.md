@@ -20,7 +20,7 @@
 | 1:45–2:15 | **THE HANDOFF** | Buyer: "Send my pickup pass" → open → enter the code from the Ops email outbox → I understand → address appears **only now** → "I'm here". In Ops: **doorbell** (signed simulator event), then camera scene **absent** (or real footage) | Pass countdown + porch details; Ops: Ring webhook (simulator-signed) → truth table P ✓ D ✓ B ✓ A=absent → **PICKUP VERIFIED** → receipt signed |
 | 2:15–2:25 | **Paid** | Pass: **Got it** | Seller hears "Sold. $90.25 is on its way." Deal history `… VERIFIED → INSPECTION → CAPTURED → CLOSED` |
 | 2:25–2:40 | **Scrutiny montage** | Ops scenario buttons: **piracy** (stranger, no pass → hold voided, alert), **no show** (window closes → relisted), **replay attack** (bad signature 401, duplicate ignored) | Red/green event feed, DENIED stamps |
-| 2:40–2:55 | **Proof** | Open the receipt `verify ↗` | SIGNATURE VALID (ES256), hashes only. Benchmark: "0 / 300 address leaks under attack" (`evals/REPORT.md`). Architecture slide |
+| 2:40–2:55 | **Proof** | Open the receipt `verify ↗` | SIGNATURE VALID (ES256), hashes only. Benchmark: "300 attacks on the same model: a naive agent leaked the address 57 times. Stoop: 0." (`evals/REPORT.md`, Bedrock Nova 2 Lite). Architecture slide |
 | 2:55–3:00 | End card | "Sell anything without meeting anyone. Built for Alexa+ and the Ring Appstore." | – |
 
 ## Before you record

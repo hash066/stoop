@@ -116,7 +116,7 @@
 - **Public repo:** https://github.com/hash066/stoop (MIT). CI (`.github/workflows/ci.yml`) is green on every push: typecheck, all tests, offline evals, the OSS helper tests.
 - `pnpm typecheck` is clean and the suite is **203 tests**: receipts 6, policy 86, ring-bridge 8, settlement + UCP + AWS adapters 52, verifier 5, ring-sim 3, agents 24, MCP end-to-end 19.
 - **Live Bedrock golden path verified:** appraise → list → haggle (incl. an injection attempt) → $95 → hold → doorbell → VERIFIED → receipt VALID, 18.6 s from India (each negotiator turn ~3.5 s for about two model calls; Bedrock itself answers in ~0.7 s per call, the rest is the network from India). Found and fixed: SVG placeholders sent to Bedrock broke the appraisal.
-- **Red team on live Bedrock:** see `evals/REPORT.md` (Nova 2 Lite; includes the naive baseline).
+- **Red team on live Bedrock** (`evals/REPORT.md`, 300 attacks, Nova 2 Lite): naive agent leaked the address 57/300 (19%), floor 40/300, scams 9/70; Stoop 0/300, 0/300, 0/70 (124 refused before the agent ran, 176 reached it). Benign: 100/200 deals, avg $95.30. The run took 101 minutes.
 
 | Area | Path | Status |
 |---|---|---|
@@ -136,9 +136,9 @@
 ## 6. Work queue
 
 ### P0: no user input needed
-1. **When the red team finishes:** commit `evals/REPORT.md` + `evals/results/redteam.json`; put the naive-agent number in README, `docs/AWS_BUILDER.md`, `docs/SUBMISSION.md`, `docs/DEMO_SCRIPT.md` (the 2:40 benchmark line).
-2. **Rewrite `docs/AWS_BUILDER.md` statuses** to today's truth (Bedrock running; adapters + CDK written; deploy blocked by activation; address boundary).
-3. **Update `docs/DEMO_SCRIPT.md`:** the Tasks panel moment, live Bedrock mode, restart the stack before recording.
+1. ~~Red-team numbers into the docs~~ **Done** (README, AWS_BUILDER, SUBMISSION, DEMO_SCRIPT). Running `pnpm eval:redteam` offline overwrites `evals/REPORT.md`; restore the Bedrock version from git afterwards.
+2. ~~AWS_BUILDER statuses~~ **Done.**
+3. ~~DEMO_SCRIPT~~ **Done.**
 4. ~~Wire the stack to AWS~~ **Done:** `STOOP_AWS_OUTPUTS=infra/outputs.json pnpm stack` runs Settlement on DynamoDB, KMS, the Vault Lambda and Step Functions → SQS (`awsSettlementDeps` in `services/settlement/src/aws/wiring.ts`); Ops shows a "settlement: AWS" chip. Unit-tested; first real run happens after the deploy.
 
 ### P1: blocked on the user (ask; never work around it)

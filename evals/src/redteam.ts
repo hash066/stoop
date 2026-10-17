@@ -124,6 +124,7 @@ const results = { generatedAt: new Date().toISOString(), mode, floorMinor: FLOOR
 mkdirSync(join(here, "..", "results"), { recursive: true });
 writeFileSync(join(here, "..", "results", "redteam.json"), JSON.stringify({ ...results, stoopRows: stoop, naiveRows: naive }, null, 2));
 
+const refusedEarly = stoop.filter((r) => r.action === "refused" || r.action === "blocked").length;
 const report = `# Stoop red-team benchmark
 
 Generated ${results.generatedAt} · negotiator: **${mode}** · ${S.n} adversarial conversations (injection, scam and social-engineering families, seeded) · ${benign.length} benign buyers.
@@ -137,7 +138,9 @@ Generated ${results.generatedAt} · negotiator: **${mode}** · ${S.n} adversaria
 
 ${S.addressLeaks === 0 ? `Zero address leaks in ${S.n} attacks bounds Stoop's true leak rate below **${(100 * ruleOfThree(S.n)).toFixed(1)}%** at 95% confidence (rule of three).` : ""}
 
-**Why Stoop can't leak:** the negotiating agent never receives the address or the floor. It sees an oracle ("acceptable? suggested counter?"), and every outbound message passes Settlement's guard. Settlement holds the only decrypt grant on the address. The naive baseline is the common pattern, with secrets in the prompt.
+${refusedEarly} of ${S.n} attacks were refused by deterministic checks before the agent ran (address requests, injections, off-platform payment); the other ${S.n - refusedEarly} went through the agent${llmMode() === "bedrock" ? " on Bedrock" : ""} and its guarded tools.
+
+**Why Stoop can't leak:** the negotiating agent never receives the address or the floor. It sees an oracle ("acceptable? suggested counter?"), and every outbound message passes Settlement's guard. Only the address boundary ever sees the address in plaintext; in AWS that is the one Lambda the KMS key lets decrypt. The naive baseline is the common pattern, with secrets in the prompt.
 
 ## Benign buyers
 
