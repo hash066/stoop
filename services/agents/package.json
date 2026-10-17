@@ -1,0 +1,29 @@
+{
+  "name": "@stoop/agents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Strands agents: Negotiator, Appraiser, BuyerBot, and the Alexa-sim host planner. Offline ScriptedModel or Amazon Bedrock.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1152.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@stoop/policy": "workspace:*",
+    "@stoop/shared": "workspace:*",
+    "@strands-agents/sdk": "^1.21.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@stoop/proof-of-handoff": "workspace:*",
+    "@stoop/settlement": "workspace:*",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  }
+}

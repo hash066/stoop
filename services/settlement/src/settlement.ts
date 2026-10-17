@@ -515,6 +515,16 @@ export class Settlement {
     return { strikes: n.strikes, blocked };
   }
 
+  /** Log a refused request that earns no strike (address request R2, prompt injection R8, links). */
+  async noteRefusal(negotiationId: string, signal: string) {
+    const n = await this.getNegotiation(negotiationId);
+    const rules: PolicyDecisionRecord["ruleIds"] =
+      signal === "address_request" ? ["R2"] : signal === "instruction_injection" ? ["R8"] : ["R7"];
+    return this.logDecision(signal === "address_request" ? "reveal_address" : "send_message", "deny", rules, [`refused_${signal}`], `buyer:${n.buyerId}`, {
+      listingId: n.listingId,
+    });
+  }
+
   acceptTerms(n: Negotiation, l: Listing, amountMinor: number, buyerLabel: string): ApprovalTerms {
     return {
       action: "accept_offer",
