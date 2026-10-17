@@ -3,9 +3,10 @@
 ## What
 
 - `scripts/media_helpers.py`: snapshot and clip download helpers, plus `RingMediaError` with Ring's error detail.
-- `scripts/download_snapshot.py`, `scripts/download_clip.py`: CLI scripts in the same style as the existing ones (print the equivalent curl).
+- `scripts/download_snapshot.py`, `scripts/download_clip.py`: CLI scripts in the same style as the existing ones (`--token`, optional `--device-id` with auto-discovery, print the equivalent curl).
 - `scripts/test_media_helpers.py`: stdlib `unittest` tests with a fake session, no network, no new dependencies.
 - `app/api/ring/snapshot/route.ts`: a Next.js route that serves a device snapshot to the dashboard.
+- `README.md`: usage examples, two rows in the scripts table, and the architecture tree.
 
 ## Why
 
