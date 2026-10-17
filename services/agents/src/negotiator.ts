@@ -126,6 +126,7 @@ export class Negotiator {
     if (offerFromText !== undefined && this.port.offerAllowed && !(await this.port.offerAllowed(n.id)))
       return { action: "rate_limited", reply: disclose(RATE_LIMITED_REPLY), signals, usedFallback: false, guardBlocks: 0 };
 
+    const replied = new AbortController();
     const evaluateOffer = tool({
       name: "evaluate_offer",
       description: "Check a buyer offer (in cents). Returns whether it is acceptable and a suggested counter. Never reveals the owner's minimum.",
@@ -180,6 +181,7 @@ export class Negotiator {
           state.counterMinor = counterMinor;
         }
         state.reply = finalText;
+        replied.abort(); // send_reply is the last step: skip the model call that would only end the turn
         return { sent: true };
       },
     });
@@ -202,9 +204,9 @@ export class Negotiator {
         `Buyer says: """${input.buyerText.slice(0, 800)}"""`,
       ].join("\n");
       // Hard budget: a misbehaving model can't loop. Exceeding it falls through to the safe template.
-      await agent.invoke(facts, { limits: { turns: MAX_AGENT_TURNS }, cancelSignal: AbortSignal.timeout(AGENT_TIMEOUT_MS) });
+      await agent.invoke(facts, { limits: { turns: MAX_AGENT_TURNS }, cancelSignal: AbortSignal.any([replied.signal, AbortSignal.timeout(AGENT_TIMEOUT_MS)]) });
     } catch {
-      usedFallback = true;
+      if (!state.reply) usedFallback = true; // a stop after send_reply is the normal end, not a failure
     }
 
     // 3) Deterministic fallback if the agent didn't produce a safe message.

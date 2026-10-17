@@ -1,6 +1,7 @@
 // Seller-side MCP server (the household's assistant, e.g. Alexa+). One tool per customer intent.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { inSentence } from "@stoop/shared";
 import { SettlementError, type Deal, type Item, type Listing } from "@stoop/settlement";
 import { errorResult, result, withApproval, type PendingActions } from "./approvals.ts";
 import { MCP_APP_MIME, RESOURCE_UI_META, uiMeta } from "./cards.ts";
@@ -140,7 +141,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
       const blocked = out.find((i) => i.blocked);
       const speech =
         `I found ${sellable.length} thing${sellable.length === 1 ? "" : "s"} you can sell, worth about ${$(total)} together.` +
-        (blocked ? ` The ${blocked.title.toLowerCase()} can't be sold. ${blocked.blockedReason} ${blocked.alternative ?? ""}` : "");
+        (blocked ? ` The ${inSentence(blocked.title)} can't be sold. ${blocked.blockedReason} ${blocked.alternative ?? ""}` : "");
       ctx.bus.emit({ type: "appraisal_done", at: ctx.now(), householdId: actor.householdId, totalMinor: total, count: out.length });
       return result(speech, { kind: "appraisal", totalListMinor: total, items: out, unidentified, compsSource, identifier: ctx.appraiser.identifierName }, ctx.cards, "appraisal-grid");
     },
@@ -238,7 +239,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
             const { token } = await s.resolveApproval(approvals[i]!.id, true, who);
             live.push(await s.publishListing(drafts[i]!.id, token!, who));
           }
-          const speech = `Done. ${live.map((l) => `Your ${l.title.toLowerCase()} is live at ${$(l.askMinor)}`).join(". ")}. I'll tell you when offers come in.${blocked.length ? ` I skipped the ${blocked[0]!.title.toLowerCase()} because it can't be resold.` : ""}`;
+          const speech = `Done. ${live.map((l) => `Your ${inSentence(l.title)} is live at ${$(l.askMinor)}`).join(". ")}. I'll tell you when offers come in.${blocked.length ? ` I skipped the ${inSentence(blocked[0]!.title)} because it can't be resold.` : ""}`;
           return result(speech, { kind: "listings", listings: live.map((l) => ({ listingId: l.id, title: l.title, askMinor: l.askMinor, photoUrl: l.photoUrls[0], state: l.state })) }, ctx.cards, "listing-card");
         },
         onDecline: async () => {
@@ -274,7 +275,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
         autoAcceptAboveMinor: autoAcceptAboveDollars ? Math.round(autoAcceptAboveDollars * 100) : undefined,
         expiresAt: ctx.now() + (days ?? 7) * 86_400_000,
       };
-      const summary = `Never sell the ${l.title.toLowerCase()} below ${$(floorMinor)}. ${mandate.autoAcceptAboveMinor ? `I may accept ${$(mandate.autoAcceptAboveMinor)} or more without asking.` : "I'll always ask you before accepting."} Buyers never see this number.`;
+      const summary = `Never sell the ${inSentence(l.title)} below ${$(floorMinor)}. ${mandate.autoAcceptAboveMinor ? `I may accept ${$(mandate.autoAcceptAboveMinor)} or more without asking.` : "I'll always ask you before accepting."} Buyers never see this number.`;
       const approval = await s.requestApproval(s.mandateTerms(mandate), who, summary);
       return withApproval({
         server,
@@ -288,7 +289,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
         onApprove: async () => {
           const { token } = await s.resolveApproval(approval.id, true, who);
           await s.setMandate(mandate, token!, who);
-          return result(`Got it. I won't go below ${$(floorMinor)} on the ${l.title.toLowerCase()}, and buyers will never know that number.`, {
+          return result(`Got it. I won't go below ${$(floorMinor)} on the ${inSentence(l.title)}, and buyers will never know that number.`, {
             kind: "mandate",
             listingId: l.id,
             title: l.title,
@@ -332,8 +333,8 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
       const first = top[0]!;
       const speech =
         top.length === 1
-          ? `${first.buyer} offers ${$(first.amountMinor)} for the ${first.title.toLowerCase()}${prefs ? `, pickup ${prefs.label} like last time` : ""}. Accept?`
-          : `You have ${top.length} offers. The newest: ${first.buyer} offers ${$(first.amountMinor)} for the ${first.title.toLowerCase()}. Accept that one?`;
+          ? `${first.buyer} offers ${$(first.amountMinor)} for the ${inSentence(first.title)}${prefs ? `, pickup ${prefs.label} like last time` : ""}. Accept?`
+          : `You have ${top.length} offers. The newest: ${first.buyer} offers ${$(first.amountMinor)} for the ${inSentence(first.title)}. Accept that one?`;
       return result(speech, { kind: "offers", offers: top, pickup: prefs?.label }, ctx.cards, "deal-approval");
     },
   );
@@ -368,7 +369,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
       const fee = Math.round(amount * 0.05);
       const prefs = await ctx.prefs.get(actor.householdId);
       const listing = await s.getListing(appr.terms.listingId!);
-      const summary = `Sell the ${listing.title.toLowerCase()} to ${appr.terms.buyerPseudonym} for ${$(amount)}? You get ${$(amount - fee)} after Stoop's 5% fee, released only after your doorbell verifies the pickup.${prefs ? ` Pickup ${prefs.label}.` : ""}`;
+      const summary = `Sell the ${inSentence(listing.title)} to ${appr.terms.buyerPseudonym} for ${$(amount)}? You get ${$(amount - fee)} after Stoop's 5% fee, released only after your doorbell verifies the pickup.${prefs ? ` Pickup ${prefs.label}.` : ""}`;
       const approve = async () => {
         try {
           const { token } = await s.resolveApproval(id!, true, who);
@@ -457,7 +458,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
       if (!deal || !rid) return errorResult("There's no verified pickup receipt yet.", "no_receipt");
       const r = await s.getReceipt(rid);
       const verifyUrl = `${ctx.publicBaseUrl}/verify/${rid}`;
-      return result(`Here's the signed receipt for the ${deal.itemTitle.toLowerCase()}. Anyone can verify it.`, {
+      return result(`Here's the signed receipt for the ${inSentence(deal.itemTitle)}. Anyone can verify it.`, {
         kind: "receipt",
         receiptId: rid,
         dealId: deal.id,
@@ -499,7 +500,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
     async ({ dealId }, extra) => {
       const deal = await latestDeal(dealId);
       if (!deal || ["CLOSED", "VOIDED", "INSPECTION", "CAPTURED"].includes(deal.state)) return errorResult("There's no sale I can cancel.", "nothing_to_cancel");
-      const summary = `Cancel the sale of the ${deal.itemTitle.toLowerCase()}? The buyer's payment hold is released and the listing is withdrawn.`;
+      const summary = `Cancel the sale of the ${inSentence(deal.itemTitle)}? The buyer's payment hold is released and the listing is withdrawn.`;
       const approval = await s.requestApproval(s.cancelTerms(deal), who, summary);
       return withApproval({
         server,

@@ -1,5 +1,6 @@
 // Proactive notifications for the two Alexa+ sims (the "notification light"). On real Alexa+ these
 // would be proactive events; locally they are SSE streams filtered per actor.
+import { inSentence } from "@stoop/shared";
 import type { EventBus, PickupPrefs, Settlement, StoopEvent } from "./deps.ts";
 
 export interface Notification {
@@ -50,13 +51,13 @@ export class NotificationHub {
         const hh = approver.slice(7);
         const prefs = await this.prefs.get(hh);
         const listing = await this.s.getListing(appr.terms.listingId!);
-        const text = `${appr.terms.buyerPseudonym} offers ${$(appr.terms.amountMinor!)} for the ${listing.title.toLowerCase()}${prefs ? `, pickup ${prefs.label} like last time` : ""}. Accept?`;
+        const text = `${appr.terms.buyerPseudonym} offers ${$(appr.terms.amountMinor!)} for the ${inSentence(listing.title)}${prefs ? `, pickup ${prefs.label} like last time` : ""}. Accept?`;
         this.push({ to: approver, kind: "offer", text, data: { approvalId: appr.id, listingId: listing.id } }, e.at);
         return;
       }
       case "deal_created": {
         const deal = await this.s.getDeal(String(e.dealId));
-        this.push({ to: `buyer:${deal.buyerId}`, kind: "deal", text: `The owner accepted ${$(deal.amountMinor)} for the ${deal.itemTitle.toLowerCase()}. Say check out to pay.`, data: { dealId: deal.id } }, e.at);
+        this.push({ to: `buyer:${deal.buyerId}`, kind: "deal", text: `The owner accepted ${$(deal.amountMinor)} for the ${inSentence(deal.itemTitle)}. Say check out to pay.`, data: { dealId: deal.id } }, e.at);
         return;
       }
       case "pass_issued": {
@@ -66,24 +67,24 @@ export class NotificationHub {
       }
       case "handoff_verified": {
         const deal = await this.s.getDeal(String(e.dealId));
-        this.push({ to: `seller:${deal.householdId}`, kind: "verified", text: `Your doorbell verified the pickup of the ${deal.itemTitle.toLowerCase()}.`, data: { dealId: deal.id } }, e.at);
+        this.push({ to: `seller:${deal.householdId}`, kind: "verified", text: `Your doorbell verified the pickup of the ${inSentence(deal.itemTitle)}.`, data: { dealId: deal.id } }, e.at);
         this.push({ to: `buyer:${deal.buyerId}`, kind: "verified", text: "Pickup verified. Tap got it on your pass once you've checked the item.", data: { dealId: deal.id } }, e.at);
         return;
       }
       case "sale_completed": {
         const deal = await this.s.getDeal(String(e.dealId));
         this.push({ to: `seller:${deal.householdId}`, kind: "sold", text: `Sold. ${$(Number(e.payoutMinor))} is on its way to you.`, data: { dealId: deal.id } }, e.at);
-        this.push({ to: `buyer:${deal.buyerId}`, kind: "sold", text: `All done. Enjoy the ${deal.itemTitle.toLowerCase()}!`, data: { dealId: deal.id } }, e.at);
+        this.push({ to: `buyer:${deal.buyerId}`, kind: "sold", text: `All done. Enjoy the ${inSentence(deal.itemTitle)}!`, data: { dealId: deal.id } }, e.at);
         return;
       }
       case "piracy_alert": {
         const deal = await this.s.getDeal(String(e.dealId));
-        this.push({ to: `seller:${deal.householdId}`, kind: "alert", text: `Heads up: your ${deal.itemTitle.toLowerCase()} was taken without a verified pickup. No money moved and I saved the doorbell evidence.`, data: { dealId: deal.id } }, e.at);
+        this.push({ to: `seller:${deal.householdId}`, kind: "alert", text: `Heads up: your ${inSentence(deal.itemTitle)} was taken without a verified pickup. No money moved and I saved the doorbell evidence.`, data: { dealId: deal.id } }, e.at);
         return;
       }
       case "no_show": {
         const deal = await this.s.getDeal(String(e.dealId));
-        this.push({ to: `seller:${deal.householdId}`, kind: "no_show", text: `The buyer didn't show up for the ${deal.itemTitle.toLowerCase()}. It's listed again.`, data: { dealId: deal.id } }, e.at);
+        this.push({ to: `seller:${deal.householdId}`, kind: "no_show", text: `The buyer didn't show up for the ${inSentence(deal.itemTitle)}. It's listed again.`, data: { dealId: deal.id } }, e.at);
         this.push({ to: `buyer:${deal.buyerId}`, kind: "no_show", text: "Your pickup window closed, so your payment hold was released.", data: { dealId: deal.id } }, e.at);
         return;
       }

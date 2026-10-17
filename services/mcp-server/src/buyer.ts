@@ -106,9 +106,13 @@ export function createBuyerServer(ctx: StoopContext, actor: BuyerActor, pending:
     const r = await ctx.negotiator.turn({ negotiationId: n.id, buyerText: text, offerMinor });
     const neg = await s.getNegotiation(n.id);
     const listing = await s.getListing(listingId);
+    // A live model often already promises an update; don't say it twice
+    const promisesUpdate = /\b(let you know|update you|get back to you|keep you posted)\b/i.test(r.reply);
     const tail =
       r.action === "awaiting_seller"
-        ? " I'll let you know when the owner answers."
+        ? promisesUpdate
+          ? ""
+          : " I'll let you know when the owner answers."
         : r.action === "accepted"
           ? " Say check out to pay. Your money is held until the pickup is verified."
           : "";
