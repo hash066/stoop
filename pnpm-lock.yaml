@@ -93,6 +93,46 @@ importers:
         specifier: ^7.1.12
         version: 7.3.7(@types/node@22.20.5)(tsx@4.23.15)(yaml@2.9.1)
 
+  evals:
+    dependencies:
+      '@aws-sdk/client-bedrock-runtime':
+        specifier: ^3.1152.0
+        version: 3.1152.0
+      '@stoop/agents':
+        specifier: workspace:*
+        version: link:../services/agents
+      '@stoop/policy':
+        specifier: workspace:*
+        version: link:../packages/policy
+      '@stoop/proof-of-handoff':
+        specifier: workspace:*
+        version: link:../packages/proof-of-handoff
+      '@stoop/ring-bridge':
+        specifier: workspace:*
+        version: link:../services/ring-bridge
+      '@stoop/settlement':
+        specifier: workspace:*
+        version: link:../services/settlement
+      '@stoop/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
+      '@stoop/verifier':
+        specifier: workspace:*
+        version: link:../services/verifier
+      tsx:
+        specifier: ^4.20.6
+        version: 4.23.15
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.5
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.5)(tsx@4.23.15)(yaml@2.9.1)
+
   packages/policy:
     dependencies:
       '@stoop/shared':

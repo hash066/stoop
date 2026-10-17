@@ -9,3 +9,7 @@ coverage/
 .DS_Store
 .turbo/
 fixtures/footage/raw/
+
+__pycache__/
+.data/
+

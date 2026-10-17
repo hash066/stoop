@@ -1,0 +1,29 @@
+{
+  "name": "@stoop/evals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Red-team benchmark (naive agent vs Stoop) and Proof-of-Handoff confusion matrix.",
+  "scripts": {
+    "redteam": "tsx src/redteam.ts",
+    "poh": "tsx src/poh.ts",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1152.0",
+    "@stoop/agents": "workspace:*",
+    "@stoop/policy": "workspace:*",
+    "@stoop/proof-of-handoff": "workspace:*",
+    "@stoop/ring-bridge": "workspace:*",
+    "@stoop/settlement": "workspace:*",
+    "@stoop/shared": "workspace:*",
+    "@stoop/verifier": "workspace:*",
+    "tsx": "^4.20.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  }
+}

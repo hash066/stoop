@@ -1,0 +1,655 @@
+{
+  "generatedAt": "2026-10-17T03:55:24.883Z",
+  "source": "synthetic labelled frames (add real footage to fixtures/footage/eval.json)",
+  "vision": "offline-footage-label",
+  "matrix": {
+    "VERIFIED": {
+      "VERIFIED": 12,
+      "PIRACY_SUSPECTED": 0,
+      "STILL_THERE": 0,
+      "REVIEW": 0
+    },
+    "PIRACY_SUSPECTED": {
+      "VERIFIED": 0,
+      "PIRACY_SUSPECTED": 12,
+      "STILL_THERE": 0,
+      "REVIEW": 0
+    },
+    "STILL_THERE": {
+      "VERIFIED": 0,
+      "PIRACY_SUSPECTED": 0,
+      "STILL_THERE": 8,
+      "REVIEW": 0
+    },
+    "REVIEW": {
+      "VERIFIED": 0,
+      "PIRACY_SUSPECTED": 0,
+      "STILL_THERE": 0,
+      "REVIEW": 8
+    }
+  },
+  "perClass": [
+    {
+      "verdict": "VERIFIED",
+      "precision": 1,
+      "recall": 1
+    },
+    {
+      "verdict": "PIRACY_SUSPECTED",
+      "precision": 1,
+      "recall": 1
+    },
+    {
+      "verdict": "STILL_THERE",
+      "precision": 1,
+      "recall": 1
+    },
+    {
+      "verdict": "REVIEW",
+      "precision": 1,
+      "recall": 1
+    }
+  ],
+  "rows": [
+    {
+      "id": "syn_0",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_1",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_2",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_3",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_4",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_5",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_6",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_7",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_8",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_9",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_10",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_11",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "VERIFIED",
+      "predicted": "VERIFIED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_12",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": true,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_13",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": true,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_14",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": true,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_15",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": true,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_16",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": true,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_17",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": true,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_18",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": true,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_19",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": true,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_20",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": false,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_21",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": false,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_22",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": false,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_23",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": false,
+      "ringPresence": false,
+      "expected": "PIRACY_SUSPECTED",
+      "predicted": "PIRACY_SUSPECTED",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_24",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "present"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "STILL_THERE",
+      "predicted": "STILL_THERE",
+      "visionBefore": "present",
+      "visionAfter": "present"
+    },
+    {
+      "id": "syn_25",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "present"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "STILL_THERE",
+      "predicted": "STILL_THERE",
+      "visionBefore": "present",
+      "visionAfter": "present"
+    },
+    {
+      "id": "syn_26",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "present"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "STILL_THERE",
+      "predicted": "STILL_THERE",
+      "visionBefore": "present",
+      "visionAfter": "present"
+    },
+    {
+      "id": "syn_27",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "present"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "STILL_THERE",
+      "predicted": "STILL_THERE",
+      "visionBefore": "present",
+      "visionAfter": "present"
+    },
+    {
+      "id": "syn_28",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "present"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "STILL_THERE",
+      "predicted": "STILL_THERE",
+      "visionBefore": "present",
+      "visionAfter": "present"
+    },
+    {
+      "id": "syn_29",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "present"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "STILL_THERE",
+      "predicted": "STILL_THERE",
+      "visionBefore": "present",
+      "visionAfter": "present"
+    },
+    {
+      "id": "syn_30",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "present"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "STILL_THERE",
+      "predicted": "STILL_THERE",
+      "visionBefore": "present",
+      "visionAfter": "present"
+    },
+    {
+      "id": "syn_31",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "present"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "STILL_THERE",
+      "predicted": "STILL_THERE",
+      "visionBefore": "present",
+      "visionAfter": "present"
+    },
+    {
+      "id": "syn_32",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": false,
+      "expected": "REVIEW",
+      "predicted": "REVIEW",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_33",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": false,
+      "expected": "REVIEW",
+      "predicted": "REVIEW",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_34",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": false,
+      "expected": "REVIEW",
+      "predicted": "REVIEW",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_35",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": false,
+      "expected": "REVIEW",
+      "predicted": "REVIEW",
+      "visionBefore": "present",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_36",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "unsure"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "REVIEW",
+      "predicted": "REVIEW",
+      "visionBefore": "present",
+      "visionAfter": "unsure"
+    },
+    {
+      "id": "syn_37",
+      "before": {
+        "label": "present"
+      },
+      "after": {
+        "label": "unsure"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "REVIEW",
+      "predicted": "REVIEW",
+      "visionBefore": "present",
+      "visionAfter": "unsure"
+    },
+    {
+      "id": "syn_38",
+      "before": {
+        "label": "unsure"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "REVIEW",
+      "predicted": "REVIEW",
+      "visionBefore": "unsure",
+      "visionAfter": "absent"
+    },
+    {
+      "id": "syn_39",
+      "before": {
+        "label": "unsure"
+      },
+      "after": {
+        "label": "absent"
+      },
+      "checkIn": true,
+      "ringPresence": true,
+      "expected": "REVIEW",
+      "predicted": "REVIEW",
+      "visionBefore": "unsure",
+      "visionAfter": "absent"
+    }
+  ]
+}
