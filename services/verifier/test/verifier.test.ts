@@ -60,3 +60,24 @@ describe("Verifier", () => {
     expect(parseVisionJson("no json", "m").presence).toBe("unsure");
   });
 });
+
+describe("BedrockVision input hygiene", () => {
+  it("drops reference photos Bedrock can't take (SVG) instead of failing the whole check", async () => {
+    const { mockClient } = await import("aws-sdk-client-mock");
+    const { BedrockRuntimeClient, ConverseCommand } = await import("@aws-sdk/client-bedrock-runtime");
+    const { BedrockVision } = await import("../src/index.ts");
+    const bedrock = mockClient(BedrockRuntimeClient);
+    bedrock.on(ConverseCommand).resolves({ output: { message: { role: "assistant", content: [{ text: '{"item":"absent","rationale":"porch is empty","personCount":0}' }] } } } as never);
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const svg = new TextEncoder().encode("<svg/>");
+    const v = await new BedrockVision("us.amazon.nova-2-lite-v1:0", "us-east-1").assess({
+      frame: { bytes: jpeg, mime: "image/jpeg", at: 1, origin: "ring", sourceName: "ring_snapshot" },
+      itemTitle: "BOB Revolution jogging stroller",
+      referencePhotos: [{ bytes: svg, mime: "image/svg+xml" }],
+    });
+    expect(v.presence).toBe("absent");
+    const sent = bedrock.commandCalls(ConverseCommand)[0]!.args[0].input.messages![0]!.content!;
+    expect(sent.filter((c) => "image" in c && c.image)).toHaveLength(1); // the frame only
+    bedrock.restore();
+  });
+});

@@ -17,7 +17,7 @@ export const URLS = {
   buyer: `http://localhost:${PORTS.alexa}/?role=buyer`,
   ops: `http://localhost:${PORTS.ops}/`,
   pass: (id) => `http://localhost:${PORTS.pass}/p/${id}`,
-  stack: `http://localhost:${PORTS.stack}`,
+  stack: process.env.STOOP_STACK_URL ?? `http://localhost:${PORTS.stack}`, // e.g. a second stack with LLM_MODE=bedrock
 };
 // Local demo tokens from services/stack (DEMO). Not real credentials.
 export const TOKENS = { seller: 'seller-demo-okafor', buyer: 'buyer-demo-dana' };

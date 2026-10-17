@@ -2,7 +2,8 @@
 // Vision identifies (Bedrock Nova 2 Lite in AWS; offline catalog matching otherwise). Prices come from
 // comps (cached asking prices or eBay Browse), never invented: fewer than 3 comps = "low confidence".
 import { createHash } from "node:crypto";
-import { BedrockRuntimeClient, ConverseCommand, type ImageFormat } from "@aws-sdk/client-bedrock-runtime";
+import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
+import { bedrockImageFormat } from "@stoop/shared";
 import { matchCatalog, type CatalogEntry } from "./catalog.ts";
 import { llmMode, modelIdFor } from "./llm.ts";
 import type { RecallChecker, RecallVerdict } from "./recall.ts";
@@ -71,28 +72,34 @@ export class BedrockIdentifier implements Identifier {
     this.client = new BedrockRuntimeClient({ region });
   }
   async identify(photo: PhotoInput): Promise<Identification | undefined> {
-    if (!photo.bytes) return new CatalogIdentifier().identify(photo);
-    const format: ImageFormat = photo.mime?.includes("png") ? "png" : "jpeg";
-    const out = await this.client.send(
-      new ConverseCommand({
-        modelId: this.modelId,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { image: { format, source: { bytes: photo.bytes } } },
-              {
-                text:
-                  'Identify the single main household item for a resale listing. Reply ONLY JSON: {"title":"<brand model type>","category":"<one word>","condition":"A|B|C|D","confidence":"high|low"}. ' +
-                  "Condition: A like new, B light wear, C visible wear, D for parts. Ignore people and do not describe them." +
-                  (photo.hint ? ` Seller's hint: ${photo.hint}` : ""),
-              },
-            ],
-          },
-        ],
-        inferenceConfig: { maxTokens: 150, temperature: 0 },
-      }),
-    );
+    const format = bedrockImageFormat(photo.mime, photo.bytes);
+    // No bytes, or a format Bedrock rejects (the SVG demo placeholders): the deterministic catalog
+    if (!photo.bytes || !format) return new CatalogIdentifier().identify(photo);
+    let out;
+    try {
+      out = await this.client.send(
+        new ConverseCommand({
+          modelId: this.modelId,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { image: { format, source: { bytes: photo.bytes } } },
+                {
+                  text:
+                    'Identify the single main household item for a resale listing. Reply ONLY JSON: {"title":"<brand model type>","category":"<one word>","condition":"A|B|C|D","confidence":"high|low"}. ' +
+                    "Condition: A like new, B light wear, C visible wear, D for parts. Ignore people and do not describe them." +
+                    (photo.hint ? ` Seller's hint: ${photo.hint}` : ""),
+                },
+              ],
+            },
+          ],
+          inferenceConfig: { maxTokens: 150, temperature: 0 },
+        }),
+      );
+    } catch {
+      return new CatalogIdentifier().identify(photo); // Bedrock refused or is unreachable: never fail the appraisal
+    }
     const text = out.output?.message?.content?.map((c) => ("text" in c ? c.text : "")).join("") ?? "";
     try {
       const j = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? "") as Identification;

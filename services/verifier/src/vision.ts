@@ -1,8 +1,8 @@
 // Vision adapters: "is THIS item on the porch?" -> present | absent | unsure.
 // Rules: categorical labels only (no fake similarity scores); never identify people (Ring content
 // policy restricts face recognition to customer-enrolled faces; we use none).
-import { BedrockRuntimeClient, ConverseCommand, type ImageFormat } from "@aws-sdk/client-bedrock-runtime";
-import type { ItemPresence } from "@stoop/shared";
+import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
+import { bedrockImageFormat, type ItemPresence } from "@stoop/shared";
 import type { Frame } from "@stoop/ring-bridge";
 
 export interface VisionInput {
@@ -63,9 +63,15 @@ export class BedrockVision implements VisionAdapter {
   }
 
   async assess(input: VisionInput): Promise<VisionVerdict> {
-    const fmt = (mime: string): ImageFormat => (mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpeg");
-    if (input.frame.mime.includes("svg")) return { presence: input.frame.label ?? "unsure", rationale: "Placeholder frame (SVG) skipped.", adapter: this.name };
-    const refs = (input.referencePhotos ?? []).slice(0, 2).map((p) => ({ image: { format: fmt(p.mime), source: { bytes: p.bytes } } }));
+    const frameFormat = bedrockImageFormat(input.frame.mime, input.frame.bytes);
+    if (!frameFormat) return { presence: input.frame.label ?? "unsure", rationale: "Placeholder frame (not an image Bedrock accepts) skipped.", adapter: this.name };
+    // An unsendable reference photo (e.g. an SVG placeholder) would make Bedrock reject the whole call
+    const refs = (input.referencePhotos ?? [])
+      .flatMap((p) => {
+        const format = bedrockImageFormat(p.mime, p.bytes);
+        return format ? [{ image: { format, source: { bytes: p.bytes } } }] : [];
+      })
+      .slice(0, 2);
     try {
       const out = await this.client.send(
         new ConverseCommand({
@@ -76,7 +82,7 @@ export class BedrockVision implements VisionAdapter {
               content: [
                 ...(refs.length ? [{ text: "Reference photos of the item:" }, ...refs] : []),
                 { text: "Doorbell camera frame to check:" },
-                { image: { format: fmt(input.frame.mime), source: { bytes: input.frame.bytes } } },
+                { image: { format: frameFormat, source: { bytes: input.frame.bytes } } },
                 { text: VISION_PROMPT(input.itemTitle, input.placement) },
               ],
             },
