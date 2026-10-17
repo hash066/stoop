@@ -57,12 +57,28 @@
 ## Strands Agents (TypeScript, `@strands-agents/sdk` 1.21)
 
 - **Used for:** the Negotiator agent (Zod tools, `limits.turns`, `cancelSignal`) with BedrockModel in AWS, and a custom `ScriptedModel` offline.
-- **Worked well:** implementing a custom `Model` (`stream()` yielding events) let the same agent run deterministically offline.
+- **Worked well:**
+  - Implementing a custom `Model` (`stream()` yielding events) let the same agent run deterministically offline.
+  - `cancelSignal` doubles as an early exit: aborting it as soon as the final `send_reply` tool succeeds skips the model call that would only end the turn. Live Nova 2 Lite turns went from ~9–10 s to ~3.5 s (from India).
 - **Needs work:**
   - There's no default turn cap, so a misbehaving model loops until you set `limits.turns`. A safe default would help.
+  - We found no documented way for a tool to end the loop ("this was the final step"). Aborting makes `invoke` throw, so the caller has to tell a deliberate stop from a failure itself.
   - Peer dependency on the v2 MCP client even when unused.
 - **Build again?** Yes.
 
-## Amazon Bedrock / AgentCore / KMS
+## Amazon Bedrock (Nova 2 Lite), AWS CLI, AWS KMS, AWS CDK
 
-**(To complete after the AWS account and Bedrock access are active.)** The code paths are written. See `AWS_BUILDER.md`.
+- **Used for:** every model role on Nova 2 Lite through Converse: the Strands Negotiator (`BedrockModel`), photo identification and porch vision (images in Converse), the host planner, and the red-team's naive baseline. KMS adapters for receipts (ECC P-256), capability tokens (HMAC) and the address vault; a CDK stack for all of it.
+- **Worked well:**
+  - `aws login` (console credentials, no access keys) worked first try, and the JS SDK v3.1152 picked the profile up with no extra code. Ideal for a hackathon.
+  - The new-account message on Bedrock was clear ("Your account is currently being verified... normally less than 2 hours") and it unlocked in under an hour.
+  - Converse is uniform across text, images and tools; Nova 2 Lite answered short prompts in ~0.7 s server-side (`metrics.latencyMs`), with a 200 requests/minute default quota.
+  - CDK's `NodejsFunction` bundled a Lambda straight from TypeScript source in a pnpm monorepo (`.ts` import specifiers included) with no extra config.
+- **Needs work:**
+  - One unsupported image (an SVG) makes Converse reject the whole request, even though the service already detects the real type ("The detected file MIME type image/svg+xml is not supported"). A per-block error, or skipping the block with a warning, would make vision pipelines more robust. We now sniff formats before sending.
+  - The account activation state is opaque: Bedrock worked while CloudFormation, KMS, DynamoDB, Lambda, Step Functions and SQS answered `OptInRequired` for hours (friction #15).
+  - KMS: the documented key-administrator statement includes `kms:CreateGrant`, a side door to Decrypt (friction #16). JWS ES256 from KMS needs a DER → raw conversion that every team rewrites; we published ours in `proof-of-handoff` (`derToRawP256`).
+  - CDK: what a custom key `policy` replaces depends on a feature flag (friction #17).
+- **AgentCore:** the control plane answered, but Runtime, Memory and Observability wait for the rest of the account to activate.
+- **Onboarding:** minutes for Bedrock once unlocked; the AWS deploy is still blocked on activation.
+- **Build again?** Yes.
