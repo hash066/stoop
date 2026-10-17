@@ -8,11 +8,28 @@ import { elicitUrl, errorResult, result, supportsUrlElicitation, withApproval, t
 import { uiMeta } from "./cards.ts";
 import type { BuyerActor, StoopContext } from "./context.ts";
 import { registerCardResources, registerConfirmAction, timeline } from "./seller.ts";
+import { registerWatchHandoff, TASKS_CAPABILITY } from "./tasks.ts";
+import type { TaskStore } from "@modelcontextprotocol/sdk/experimental/tasks/interfaces.js";
+import type { Deal } from "@stoop/settlement";
 
 const $ = (minor: number) => `$${(minor / 100).toFixed(minor % 100 ? 2 : 0)}`;
 
-export function createBuyerServer(ctx: StoopContext, actor: BuyerActor, pending: PendingActions): McpServer {
-  const server = new McpServer({ name: "stoop-buyer", version: "0.1.0", title: "Stoop for buyers" }, { capabilities: { logging: {} } });
+const ORDER_SPEECH: Record<string, string> = {
+  AGREED: "The owner accepted. Say check out to pay.",
+  CHECKOUT_OPEN: "Your checkout is open. Say yes to pay.",
+  FUNDS_HELD: "Your payment is held. Your pickup pass is coming.",
+  PASS_ISSUED: "Your payment is held and your pickup pass is ready.",
+  WINDOW_OPEN: "Your pickup window is open. Tap I'm here on the pass when you arrive.",
+  INSPECTION: "Pickup verified. Tap got it on your pass, or the payment releases automatically in two hours.",
+  CLOSED: "All done. Enjoy it!",
+  VOIDED: "This purchase was cancelled and your hold was released.",
+};
+
+export function createBuyerServer(ctx: StoopContext, actor: BuyerActor, pending: PendingActions, taskStore?: TaskStore): McpServer {
+  const server = new McpServer(
+    { name: "stoop-buyer", version: "0.1.0", title: "Stoop for buyers" },
+    { capabilities: { logging: {}, ...(taskStore ? { tasks: TASKS_CAPABILITY } : {}) }, taskStore },
+  );
   const s = ctx.settlement;
   const who = `buyer:${actor.buyerId}`;
   registerCardResources(server, ctx);
@@ -237,19 +254,12 @@ export function createBuyerServer(ctx: StoopContext, actor: BuyerActor, pending:
     async ({ dealId }) => {
       const deal = await myDeal(dealId);
       if (!deal) return result("You don't have any purchases yet.", { kind: "status", deal: null });
-      const speech: Record<string, string> = {
-        AGREED: "The owner accepted. Say check out to pay.",
-        CHECKOUT_OPEN: "Your checkout is open. Say yes to pay.",
-        FUNDS_HELD: "Your payment is held. Your pickup pass is coming.",
-        PASS_ISSUED: "Your payment is held and your pickup pass is ready.",
-        WINDOW_OPEN: "Your pickup window is open. Tap I'm here on the pass when you arrive.",
-        INSPECTION: "Pickup verified. Tap got it on your pass, or the payment releases automatically in two hours.",
-        CLOSED: "All done. Enjoy it!",
-        VOIDED: "This purchase was cancelled and your hold was released.",
-      };
-      return result(speech[deal.state] ?? `Your purchase is ${deal.state.toLowerCase().replace(/_/g, " ")}.`, await timeline(ctx, deal), ctx.cards, "handoff-timeline");
+      return statusResult(deal);
     },
   );
+  const stateSpeech = (deal: Deal) => ORDER_SPEECH[deal.state] ?? `Your purchase is ${deal.state.toLowerCase().replace(/_/g, " ")}.`;
+  const statusResult = async (deal: Deal) => result(stateSpeech(deal), await timeline(ctx, deal), ctx.cards, "handoff-timeline");
+  if (taskStore) registerWatchHandoff(server, ctx, { resolveDeal: myDeal, speech: stateSpeech, snapshot: statusResult });
 
   registerConfirmAction(server, pending, who);
   return server;

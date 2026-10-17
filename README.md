@@ -39,7 +39,7 @@ Follow [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) for the 3-minute flow. Every
 ## Tests and evals
 
 ```bash
-pnpm test           # 173 tests: policy (property-based), receipts, settlement, UCP, Ring, verifier, agents, MCP end-to-end
+pnpm test           # 181 tests: policy (property-based), receipts, settlement, UCP, Ring, ring-sim, verifier, agents, MCP end-to-end (incl. Tasks)
 pnpm eval:redteam   # 300 adversarial conversations + 200 benign buyers -> evals/REPORT.md
 pnpm eval:poh       # proof-of-handoff confusion matrix -> evals/POH_REPORT.md
 ```
@@ -52,6 +52,16 @@ pnpm eval:poh       # proof-of-handoff confusion matrix -> evals/POH_REPORT.md
   - the > $100 voice code
   - scam blocking and the two-buyer race
   - piracy, no-show, item still there, camera offline, and webhook replay
+  - offer flooding (rate limited before any model call)
+  - MCP Tasks: `watch_handoff` follows a sale to CLOSED, stays private to its owner, and can be cancelled
+
+**Simulated Ring events from the command line** (local or deployed; always labelled simulator-signed):
+
+```bash
+pnpm ring-sim event button
+pnpm ring-sim replay
+pnpm ring-sim scenario golden
+```
 
 ## Docs
 
@@ -70,6 +80,7 @@ pnpm eval:poh       # proof-of-handoff confusion matrix -> evals/POH_REPORT.md
 ```
 packages/  shared · policy · proof-of-handoff · ui-cards
 services/  settlement · ring-bridge · verifier · agents · mcp-server · stack
+tools/     ring-sim (simulator-signed Ring webhooks)
 apps/      alexa-sim · pass · ops
 evals/     red team + proof-of-handoff
 oss/       ring-api-helloworld contribution

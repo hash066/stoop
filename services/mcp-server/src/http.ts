@@ -9,6 +9,7 @@ import { Hono, type Context } from "hono";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import { InMemoryTaskStore } from "@modelcontextprotocol/sdk/experimental/tasks/stores/in-memory.js";
 import { PendingActions } from "./approvals.ts";
 import { createBuyerServer } from "./buyer.ts";
 import type { BuyerActor, SellerActor, StoopContext } from "./context.ts";
@@ -40,6 +41,14 @@ export function mcpRouter(ctx: StoopContext, opts: McpHttpOptions) {
     let p = pendingByActor.get(key);
     if (!p) pendingByActor.set(key, (p = new PendingActions()));
     return p;
+  };
+  // One task store per actor: stateless calls carry no session id, so per-actor stores are what keep
+  // one household's tasks invisible to everyone else (DynamoDB keyed by actor in AWS).
+  const tasksByActor = new Map<string, InMemoryTaskStore>();
+  const tasksFor = (key: string) => {
+    let t = tasksByActor.get(key);
+    if (!t) tasksByActor.set(key, (t = new InMemoryTaskStore()));
+    return t;
   };
 
   setInterval(() => {
@@ -73,7 +82,9 @@ export function mcpRouter(ctx: StoopContext, opts: McpHttpOptions) {
     if (!actor) return unauthorized(c);
     const actorKey = actor.kind === "seller" ? `seller:${actor.householdId}` : `buyer:${actor.buyerId}`;
     const makeServer = () =>
-      actor.kind === "seller" ? createSellerServer(ctx, actor, pendingFor(actorKey)) : createBuyerServer(ctx, actor, pendingFor(actorKey));
+      actor.kind === "seller"
+        ? createSellerServer(ctx, actor, pendingFor(actorKey), tasksFor(actorKey))
+        : createBuyerServer(ctx, actor, pendingFor(actorKey), tasksFor(actorKey));
 
     const sessionId = c.req.header("mcp-session-id");
     const method = c.req.method;

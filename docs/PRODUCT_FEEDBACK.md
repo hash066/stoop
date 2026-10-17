@@ -9,8 +9,11 @@
   - `WebStandardStreamableHTTPServerTransport` dropped straight into Hono.
   - `extra.sendRequest` sends the elicitation on the tool call's own stream, which is exactly what stateful elicitation needs.
   - Zod v4 schemas work for input and output.
+  - Experimental Tasks: `server.experimental.tasks.registerToolTask` plus `InMemoryTaskStore` gave us `tasks/get|result|list|cancel` with little code.
 - **Needs work:**
   - The ecosystem is mid-split. v2 (`@modelcontextprotocol/server` / `client` 2.x) targets a newer spec where elicitation becomes "input required" results, while hackathon rules require 2025-11-25. It took time to establish that v1.32 is the right line for 2025-11-25 sessions and elicitation.
+  - `registerToolTask` with a `z.object(...)` input schema types the handler's arguments as `unknown`, while a raw shape works. `registerTool` accepts both.
+  - `taskSupport: "optional"` makes a plain `tools/call` block until the task finishes (automatic polling). For a watcher that lasts hours, that's a trap, so we used `"required"`.
   - The client opens a standalone GET SSE stream by default. In a browser with several tabs this exhausts the 6-per-host connection limit and silently stalls `initialize`. We now return 405 on GET (allowed by the spec). A client option to skip the standalone stream would help.
 - **Onboarding:** about 30 minutes to a working tool; about half a day to understand sessions, elicitation and the v1/v2 situation.
 - **Build again?** Yes. It's the standard, and the same server runs in Alexa+-style clients and Claude Desktop.

@@ -27,6 +27,7 @@ Money is **held, not charged**. It is released only after the seller's doorbell 
 5. **Offers.** "What offers do I have?" → `review_offers`. "Yes, accept" → `respond_to_offer({ decision: "accept" })`. The owner confirms the sale and sees their payout after the 5% fee.
 6. **Status and proof.**
    - `handoff_status` reports payment held, window, check-in, doorbell, verified, paid.
+   - If your client supports MCP Tasks, `watch_handoff` follows the sale in the background. Poll `tasks/get` and speak each new `statusMessage`; `tasks/result` gives the final card.
    - `get_receipt` returns the signed proof-of-handoff receipt.
    - If the camera couldn't verify a pickup and the owner says the buyer has it: `confirm_pickup`.
    - To cancel: `cancel_sale`. This needs approval, and the buyer's hold is released.
@@ -37,7 +38,7 @@ Money is **held, not charged**. It is released only after the seller's doorbell 
 2. `make_offer({ listingId, amountDollars })` or `ask_seller({ listingId, message })`. The seller's AI assistant answers within the owner's rules and may counter. Relay its reply faithfully.
 3. When the owner accepts, `checkout({})`. The tool shows the full breakdown (item, verified-pickup fee, tax, total) and the refund policy, then asks for a yes. **Over $100 it also needs the buyer's 4-digit purchase code.** Never collect card numbers.
 4. `get_pickup_pass({})` opens the pass on the buyer's phone with a URL elicitation. Never paste the pass link into the conversation.
-5. `order_status` for where things stand.
+5. `order_status` for where things stand (or `watch_handoff` as a Task, as above).
 
 ## Approvals
 

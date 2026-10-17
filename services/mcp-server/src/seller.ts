@@ -5,6 +5,8 @@ import { SettlementError, type Deal, type Item, type Listing } from "@stoop/sett
 import { errorResult, result, withApproval, type PendingActions } from "./approvals.ts";
 import { MCP_APP_MIME, RESOURCE_UI_META, uiMeta } from "./cards.ts";
 import type { SellerActor, StoopContext } from "./context.ts";
+import { registerWatchHandoff, TASKS_CAPABILITY } from "./tasks.ts";
+import type { TaskStore } from "@modelcontextprotocol/sdk/experimental/tasks/interfaces.js";
 
 const $ = (minor: number) => `$${(minor / 100).toFixed(minor % 100 ? 2 : 0)}`;
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
@@ -49,8 +51,11 @@ const STATE_SPEECH: Record<string, string> = {
   NO_SHOW: "The buyer didn't show up, so their hold was released and your item is listed again.",
 };
 
-export function createSellerServer(ctx: StoopContext, actor: SellerActor, pending: PendingActions): McpServer {
-  const server = new McpServer({ name: "stoop-seller", version: "0.1.0", title: "Stoop for sellers" }, { capabilities: { logging: {} } });
+export function createSellerServer(ctx: StoopContext, actor: SellerActor, pending: PendingActions, taskStore?: TaskStore): McpServer {
+  const server = new McpServer(
+    { name: "stoop-seller", version: "0.1.0", title: "Stoop for sellers" },
+    { capabilities: { logging: {}, ...(taskStore ? { tasks: TASKS_CAPABILITY } : {}) }, taskStore },
+  );
   const s = ctx.settlement;
   const who = `seller:${actor.householdId}`;
   registerCardResources(server, ctx);
@@ -391,9 +396,12 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
     async ({ dealId }) => {
       const deal = await latestDeal(dealId);
       if (!deal) return result("No sales in progress yet.", { kind: "status", deal: null }, ctx.cards, "handoff-timeline");
-      return result(STATE_SPEECH[deal.state] ?? `The sale is ${deal.state.toLowerCase().replace(/_/g, " ")}.`, await timeline(ctx, deal), ctx.cards, "handoff-timeline");
+      return statusResult(deal);
     },
   );
+  const stateSpeech = (deal: Deal) => STATE_SPEECH[deal.state] ?? `The sale is ${deal.state.toLowerCase().replace(/_/g, " ")}.`;
+  const statusResult = async (deal: Deal) => result(stateSpeech(deal), await timeline(ctx, deal), ctx.cards, "handoff-timeline");
+  if (taskStore) registerWatchHandoff(server, ctx, { resolveDeal: latestDeal, speech: stateSpeech, snapshot: statusResult });
 
   // ------------------------------------------------------------ get_receipt
   server.registerTool(

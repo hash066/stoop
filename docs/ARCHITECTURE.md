@@ -72,6 +72,7 @@ flowchart LR
 | Verifier | `services/verifier` | `frame_needed` → frame → vision (categorical, no identity) → `recordFrame` |
 | Agents | `services/agents` | Strands Negotiator with guarded tools, Appraiser (vision + comps + CPSC rules), BuyerBot personas, host planner, and a ScriptedModel for offline runs |
 | MCP server | `services/mcp-server` | Seller and buyer tools, elicitation (form + URL), approval fallback, MCP Apps cards, sessions plus a stateless path |
+| Ring simulator | `tools/ring-sim` | CLI that sends simulator-signed Ring v1.1 webhooks (event, replay attack, scenarios) to a local or deployed stack |
 | Stack | `services/stack` | Local composition, the Marshal (issues passes), notifications, Ops SSE, pass API, `/verify`, simulator, planner endpoint, EXIF stripping |
 | Cards | `packages/ui-cards` | Six single-file MCP Apps on the official ext-apps `App` class |
 | Apps | `apps/alexa-sim`, `apps/pass`, `apps/ops` | Alexa+ device simulator (seller/buyer), buyer pickup pass, mission control |
@@ -137,6 +138,11 @@ Rows are checked top-down:
   - `GET` → 405 (no standalone stream).
   - Elicitation: form for approvals; URL for the pickup pass and anything sensitive.
   - Tools with `outputSchema`, `structuredContent`, and `_meta.ui.resourceUri` on both the definition and the result.
+  - **Tasks (experimental):** `watch_handoff` (seller and buyer) is task-only (`execution.taskSupport: "required"`).
+    - The call returns a task at once. `tasks/get` carries one spoken line per deal step as `statusMessage`, and `tasks/result` returns the handoff-timeline card when the sale closes or needs a person.
+    - `tasks/list` and `tasks/cancel` are supported.
+    - Task stores are per actor, so stateless calls can't see another household's tasks.
+    - Polling is the contract, because there is no standalone stream for `notifications/tasks/status`.
 - **MCP Apps 2026-01-26**
   - `ui://stoop/<card>@<hash>`, `text/html;profile=mcp-app`.
   - The host renders through a cross-origin sandbox proxy, with default-deny CSP.
