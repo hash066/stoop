@@ -54,10 +54,14 @@ export function deriveSignals(ev: HandoffEvidence): HandoffSignals {
  *                                                     (a passer-by triggering a frame isn't a failed pickup)
  *  5. after = absent, before != present            -> REVIEW (bad baseline: can't attribute removal)
  *  6. after = absent, no valid check-in            -> PIRACY_SUSPECTED
- *  7. after = absent, check-in but no Ring presence -> REVIEW (camera may have missed it)
+ *  7. after = absent, check-in but no Ring presence -> PENDING while Ring webhooks may still arrive
+ *                                                     (now < check-in + 3 min), then REVIEW
  *  8. after = absent, check-in + Ring presence     -> VERIFIED
+ *
+ * `now` makes row 7 time-aware: webhooks can lag, so "no doorbell event" isn't final until the
+ * presence window has passed. Callers re-evaluate at checkInAt + PRESENCE_WINDOW_MS.
  */
-export function evaluateHandoff(ev: HandoffEvidence): HandoffResult {
+export function evaluateHandoff(ev: HandoffEvidence, now?: number): HandoffResult {
   const signals = deriveSignals(ev);
   const r = (verdict: HandoffVerdict, ...reasons: string[]): HandoffResult => ({
     verdict,
@@ -78,6 +82,9 @@ export function evaluateHandoff(ev: HandoffEvidence): HandoffResult {
   // after === "absent"
   if (!signals.B) return r("REVIEW", "bad_baseline_item_not_seen_before");
   if (!signals.P) return r("PIRACY_SUSPECTED", "item_gone_without_valid_check_in");
-  if (!signals.D) return r("REVIEW", "check_in_without_ring_presence");
+  if (!signals.D) {
+    if (now !== undefined && now < (ev.checkInAt as number) + PRESENCE_WINDOW_MS) return r("PENDING", "awaiting_ring_presence");
+    return r("REVIEW", "check_in_without_ring_presence");
+  }
   return r("VERIFIED", "check_in", "ring_presence", "item_seen_before", "item_gone_after");
 }

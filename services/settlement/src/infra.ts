@@ -151,7 +151,7 @@ export class EventBus {
 export interface ScheduledJob {
   id: string;
   at: number;
-  kind: "open_window" | "close_window" | "inspection_elapsed" | "reservation_expired" | "hold_check";
+  kind: "open_window" | "close_window" | "inspection_elapsed" | "reservation_expired" | "hold_check" | "presence_grace";
   dealId: string;
 }
 

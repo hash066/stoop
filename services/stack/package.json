@@ -1,0 +1,35 @@
+{
+  "name": "@stoop/stack",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local composition of every Stoop service behind one HTTP server (the AWS deployment splits these into Lambdas / AgentCore / Step Functions).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@stoop/agents": "workspace:*",
+    "@stoop/mcp-server": "workspace:*",
+    "@stoop/policy": "workspace:*",
+    "@stoop/proof-of-handoff": "workspace:*",
+    "@stoop/ring-bridge": "workspace:*",
+    "@stoop/settlement": "workspace:*",
+    "@stoop/shared": "workspace:*",
+    "@stoop/verifier": "workspace:*",
+    "hono": "^4.13.13",
+    "tsx": "^4.20.6",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  }
+}

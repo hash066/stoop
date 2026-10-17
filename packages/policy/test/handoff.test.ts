@@ -68,6 +68,15 @@ describe("Proof-of-Handoff truth table (plan §7.3)", () => {
           }
   });
 
+  it("no Ring event yet: PENDING inside the presence window, REVIEW after it (webhooks can lag)", () => {
+    const noRing = ev({ ringEvents: [] });
+    expect(evaluateHandoff(noRing, CHECK_IN + 60_000).verdict).toBe("PENDING");
+    expect(evaluateHandoff(noRing, CHECK_IN + 60_000).reasons).toContain("awaiting_ring_presence");
+    expect(evaluateHandoff(noRing, CHECK_IN + 3 * 60_000 + 1).verdict).toBe("REVIEW");
+    // a late webhook inside the window still verifies
+    expect(evaluateHandoff(ev({ ringEvents: [ring({ at: CHECK_IN + 2 * 60_000 })] }), CHECK_IN + 2 * 60_000).verdict).toBe("VERIFIED");
+  });
+
   it("exposes derived signals for the Ops console", () => {
     const res = evaluateHandoff(ev({ ringEvents: [] }));
     expect(res.signals).toEqual({ P: true, D: false, B: true });

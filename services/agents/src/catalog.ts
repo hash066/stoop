@@ -20,10 +20,10 @@ export const CATALOG: CatalogEntry[] = [
     category: "stroller",
     condition: "B",
     comps: [
-      { title: "BOB Revolution Flex 3.0 jogging stroller, used", priceMinor: 135_00, source: "cached:marketplace" },
-      { title: "BOB Revolution SE stroller, good condition", priceMinor: 110_00, source: "cached:marketplace" },
-      { title: "BOB jogging stroller, some wear", priceMinor: 95_00, source: "cached:marketplace" },
-      { title: "BOB Revolution Pro, like new", priceMinor: 180_00, source: "cached:marketplace" },
+      { title: "BOB Revolution Flex 3.0 jogging stroller, used", priceMinor: 140_00, source: "cached:marketplace" },
+      { title: "BOB Revolution SE stroller, good condition", priceMinor: 125_00, source: "cached:marketplace" },
+      { title: "BOB jogging stroller, some wear", priceMinor: 99_00, source: "cached:marketplace" },
+      { title: "BOB Revolution Pro, like new", priceMinor: 185_00, source: "cached:marketplace" },
     ],
   },
   {

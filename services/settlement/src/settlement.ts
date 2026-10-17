@@ -11,6 +11,7 @@ import {
   guardOutgoing,
   INSPECTION_MS,
   isPresenceEvent,
+  PRESENCE_WINDOW_MS,
   suggestCounter,
   termsHash,
   transition,
@@ -231,6 +232,26 @@ export class Settlement {
 
   async getItem(itemId: string) {
     return this.mustGet<Item>(K.item(itemId), "item_not_found");
+  }
+
+  async itemsForHousehold(householdId: string): Promise<Item[]> {
+    return (await this.d.store.list<Item>("item#")).filter((i) => i.householdId === householdId).sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  async householdPublic(householdId: string) {
+    const h = await this.mustGet<Household>(K.household(householdId), "household_not_found");
+    return { id: h.id, displayName: h.displayName, zip: h.zip, ringDeviceId: h.ringDeviceId, porchInstructions: h.porchInstructions };
+  }
+
+  async passIdForDeal(dealId: string) {
+    return (await this.getDeal(dealId)).passId;
+  }
+
+  /** When the buyer tapped "I'm here" (signal P), if they have. No device or buyer details. */
+  async checkInAt(dealId: string): Promise<number | undefined> {
+    const deal = await this.getDeal(dealId);
+    if (!deal.passId) return undefined;
+    return (await this.d.store.get<Pass>(K.pass(deal.passId)))?.checkInAt;
   }
 
   async draftListing(itemId: string, overrides: { title?: string; description?: string; askMinor?: number } = {}): Promise<Listing> {
@@ -1017,11 +1038,16 @@ export class Settlement {
       unsureRetries: ev.unsureRetries,
       camera: ev.camera,
     };
-    const result = evaluateHandoff(input);
+    const result = evaluateHandoff(input, this.now());
     this.emit("handoff_evaluated", { dealId, verdict: result.verdict, signals: result.signals, reasons: result.reasons });
 
     switch (result.verdict) {
       case "PENDING":
+        if (result.reasons.includes("awaiting_ring_presence") && input.checkInAt !== undefined) {
+          // Re-decide once the presence window has passed (Step Functions Wait in AWS).
+          this.d.scheduler.cancelFor(dealId, "presence_grace");
+          this.d.scheduler.schedule({ kind: "presence_grace", at: input.checkInAt + PRESENCE_WINDOW_MS + 1000, dealId });
+        }
         return deal;
       case "RETRY_FRAME":
         ev.unsureRetries += 1;
@@ -1193,6 +1219,9 @@ export class Settlement {
       }
       case "inspection_elapsed":
         if (deal.state === "INSPECTION") await this.tryCapture(deal.id, "rules:inspection_elapsed");
+        return;
+      case "presence_grace":
+        await this.evaluate(deal.id);
         return;
       case "hold_check":
         if (["FUNDS_HELD", "PASS_ISSUED"].includes(deal.state) && deal.holdId) {

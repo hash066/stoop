@@ -276,6 +276,30 @@ describe("handoff failures", () => {
     expect(d.state).toBe("INSPECTION");
   });
 
+  it("late Ring webhook: waits out the presence window instead of jumping to REVIEW", async () => {
+    const st = await makeStack();
+    const { s, clock, tick } = st;
+    const { deal, pass } = await openWindowDeal(st);
+    await s.recordFrame(deal.id, "before", frame("present", clock.now()));
+    await s.checkIn(pass.id, "device-dana");
+    let d = await s.recordFrame(deal.id, "after", frame("absent", clock.now() + 1));
+    expect(d.state).toBe("WINDOW_OPEN"); // pending: the doorbell event may still be on its way
+    await tick(60_000);
+    d = (await s.ingestRingEvent(ringEvent(clock.now(), { kind: "button_press", subType: undefined }))) && (await s.getDeal(deal.id));
+    expect(d.state).toBe("INSPECTION");
+  });
+
+  it("no Ring event at all: REVIEW once the presence window passes", async () => {
+    const st = await makeStack();
+    const { s, clock, tick } = st;
+    const { deal, pass } = await openWindowDeal(st);
+    await s.recordFrame(deal.id, "before", frame("present", clock.now()));
+    await s.checkIn(pass.id, "device-dana");
+    await s.recordFrame(deal.id, "after", frame("absent", clock.now()));
+    await tick(3 * 60_000 + 2000);
+    expect((await s.getDeal(deal.id)).state).toBe("REVIEW");
+  });
+
   it("after-frame unsure: retries, then REVIEW", async () => {
     const st = await makeStack();
     const { s, clock } = st;
