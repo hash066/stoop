@@ -83,6 +83,9 @@ export function mcpRouter(ctx: StoopContext, opts: McpHttpOptions) {
       if (!sess) return c.json({ jsonrpc: "2.0", error: { code: -32003, message: "Session not found" }, id: null }, 404);
       if (sess.actorKey !== actorKey || sess.role !== role) return c.json({ jsonrpc: "2.0", error: { code: -32004, message: "Session belongs to someone else" }, id: null }, 403);
       sess.lastSeen = Date.now();
+      // No standalone GET SSE stream (spec: server MAY return 405). Elicitations and progress ride on
+      // each POST's own SSE response, so browsers don't burn one of their 6 per-host connections on it.
+      if (method === "GET") return c.body(null, 405, { Allow: "POST, DELETE" });
       if (method === "POST") {
         const body = await c.req.raw.clone().json().catch(() => undefined);
         opts.onRpc?.({ role, sessionId, direction: "in", body });

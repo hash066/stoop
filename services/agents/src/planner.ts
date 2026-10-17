@@ -20,6 +20,8 @@ export interface PlannerState {
   activeDealId?: string;
   /** Approval waiting for a spoken yes (clients without elicitation). */
   pendingApprovalId?: string;
+  /** A buyer offer the seller was just notified about (proactive "Accept?"). */
+  pendingOfferApprovalId?: string;
 }
 
 export interface PlannedCall {
@@ -45,7 +47,12 @@ export function planOffline(utterance: string, state: PlannerState, tools: McpTo
   const no = /^(no|nope|decline|don't|do not|reject|cancel that)\b/.test(u);
 
   if ((yes || no) && state.pendingApprovalId && has(tools, "confirm_action")) {
-    P("confirm_action", { approvalId: state.pendingApprovalId, decision: yes ? "accept" : "decline" });
+    const code = u.match(/\b(\d{4})\b/);
+    P("confirm_action", { approvalId: state.pendingApprovalId, decision: yes ? "accept" : "decline", ...(code ? { voiceCode: code[1] } : {}) });
+    return { calls, planner: "offline" };
+  }
+  if ((yes || no) && state.pendingOfferApprovalId && has(tools, "respond_to_offer")) {
+    P("respond_to_offer", { decision: yes ? "accept" : "decline", approvalId: state.pendingOfferApprovalId });
     return { calls, planner: "offline" };
   }
 

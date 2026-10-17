@@ -1,0 +1,27 @@
+:root { --paper: #f4efe4; --card: #fbf8f1; --ink: #1f1d1a; --muted: #6d665b; --rule: #d6cdbb; --amber: #c97a1a; --ok: #2f6b3b; --bad: #9b2c1f; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.5 "IBM Plex Sans", system-ui, sans-serif; }
+.pass { max-width: 460px; margin: 0 auto; padding: 24px 16px calc(32px + env(safe-area-inset-bottom)); }
+h1 { font: 700 30px/1.15 Fraunces, Georgia, serif; margin: 0 0 16px; }
+h2 { font: 600 20px Fraunces, Georgia, serif; margin: 0 0 8px; }
+.eyebrow { font: 500 12px "IBM Plex Mono", monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+.num { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.block { background: var(--card); border: 1px solid var(--rule); padding: 16px; margin: 0 0 12px; }
+.row { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--rule); }
+.row:first-child { border-top: 0; }
+.row.total { font-weight: 600; }
+.held { margin: 10px 0 0; color: var(--ok); font-weight: 500; }
+.big { font-size: 28px; margin: 0; }
+.porch { margin-top: 14px; padding: 12px; border-left: 4px solid var(--amber); background: #f6ead6; }
+.addr { font: 600 19px Fraunces, Georgia, serif; margin: 0 0 6px; }
+.otp { width: 100%; font-size: 34px; letter-spacing: .4em; text-align: center; padding: 12px; border: 1px solid var(--ink); background: var(--card); margin: 8px 0 12px; }
+button { font: inherit; width: 100%; padding: 15px; cursor: pointer; margin-top: 8px; }
+.primary { background: var(--ink); color: var(--card); border: 0; font-weight: 600; }
+.primary:disabled { opacity: .4; }
+.secondary { background: transparent; border: 1px solid var(--ink); color: var(--ink); }
+.big-btn { font-size: 22px; padding: 20px; }
+.status { font-weight: 500; margin: 0; }
+.err { color: var(--bad); }
+.stamp { display: inline-block; transform: rotate(-3deg); border: 3px solid var(--ok); color: var(--ok); padding: 6px 14px; font: 700 18px "IBM Plex Mono", monospace; letter-spacing: .12em; margin-bottom: 8px; }
+.receipt { color: var(--ink); font-weight: 500; }

@@ -9,11 +9,17 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "pnpm -r --if-present test",
+    "cards": "pnpm --filter @stoop/ui-cards build",
+    "stack": "pnpm --filter @stoop/stack start",
+    "demo": "pnpm cards && concurrently -k -n stack,alexa,pass,ops -c yellow,cyan,green,magenta \"pnpm stack\" \"pnpm --filter @stoop/alexa-sim dev\" \"pnpm --filter @stoop/pass dev\" \"pnpm --filter @stoop/ops dev\"",
+    "test": "pnpm -r --workspace-concurrency=1 --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
-    "build": "pnpm -r --if-present build"
+    "build": "pnpm -r --if-present build",
+    "eval:redteam": "pnpm --filter @stoop/evals redteam",
+    "eval:poh": "pnpm --filter @stoop/evals poh"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "typescript": "^5.7.3"
   }
 }

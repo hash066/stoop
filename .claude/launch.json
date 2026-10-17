@@ -1,0 +1,9 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "stack", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@stoop/stack", "start"], "port": 8787 },
+    { "name": "alexa-sim", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@stoop/alexa-sim", "dev"], "port": 5180 },
+    { "name": "pass", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@stoop/pass", "dev"], "port": 5182 },
+    { "name": "ops", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@stoop/ops", "dev"], "port": 5183 }
+  ]
+}

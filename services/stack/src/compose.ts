@@ -29,6 +29,7 @@ import { BedrockVision, LabelVision, Verifier } from "@stoop/verifier";
 import { LocalPhotoStore, LocalPreferenceMemory } from "./memory.ts";
 import { NotificationHub } from "./notifications.ts";
 import { verifyPageHtml, refundPolicyHtml } from "./pages.ts";
+import { SANDBOX_PROXY_HTML } from "./sandbox.ts";
 
 export interface StackConfig {
   publicBaseUrl: string;
@@ -304,6 +305,8 @@ export async function createStack(cfg: StackConfig) {
     return c.html(verifyPageHtml(r, out, cfg.publicBaseUrl));
   });
   app.get("/policies/refunds", (c) => c.html(refundPolicyHtml()));
+  // MCP Apps sandbox proxy, served from this (different) origin than the sim host.
+  app.get("/sandbox/proxy.html", (c) => c.html(SANDBOX_PROXY_HTML));
 
   // Frames for the Ops console (hash-addressed; porch zone only, never sent to buyers)
   app.get("/ops/frame/:dealId/:kind", (c) => {

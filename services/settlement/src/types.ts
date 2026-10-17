@@ -166,6 +166,8 @@ export interface Pass {
   deviceId?: string;
   consentAt?: number;
   checkInAt?: number;
+  /** Last recorded address-release outcome; decisions are logged only when it changes. */
+  lastAddressOutcome?: "allow" | "deny";
   createdAt: number;
 }
 

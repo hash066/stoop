@@ -193,7 +193,8 @@ export class Settlement {
     const b: Buyer = {
       id: input.id ?? newId("buyer"),
       displayName: input.displayName,
-      pseudonym: `Buyer ${randomInt(10, 99)}`,
+      // Letter + digit, so it never sounds like a price ("Buyer 95 offers $95").
+      pseudonym: `Buyer ${"ABCDEFGHJKLMNPQRSTUVWXYZ"[randomInt(0, 24)]}${randomInt(2, 10)}`,
       email: input.email,
       voiceCodeHash: hashSecret(input.voiceCode),
       walletToken: input.walletToken,
@@ -841,20 +842,23 @@ export class Settlement {
     const hh = await this.mustGet<Household>(K.household(deal.householdId), "household_not_found");
     let address: string | undefined;
     let porchInstructions: string | undefined;
-    if (deal.window && p.consentAt) {
-      const decision = await this.record(
-        {
-          action: "reveal_address",
-          dealState: deal.state,
-          window: deal.window,
-          now: this.now(),
-          requester: { buyerId: p.buyerId, deviceId },
-          bound: { buyerId: deal.buyerId, deviceId: p.deviceId },
-          channel: "pass_page",
-        },
-        `buyer:${p.buyerId}`,
-        { dealId: deal.id },
-      );
+    const terminal = ["CLOSED", "VOIDED", "CHECKOUT_ABANDONED", "CAPTURED", "PAYOUT_RECORDED"].includes(deal.state);
+    if (deal.window && p.consentAt && !terminal) {
+      const input = {
+        action: "reveal_address" as const,
+        dealState: deal.state,
+        window: deal.window,
+        now: this.now(),
+        requester: { buyerId: p.buyerId, deviceId },
+        bound: { buyerId: deal.buyerId, deviceId: p.deviceId },
+        channel: "pass_page" as const,
+      };
+      // The pass polls; audit only when the outcome changes (first reveal, or access ending).
+      const decision = decide(input);
+      if (decision.outcome !== p.lastAddressOutcome) {
+        await this.record(input, `buyer:${p.buyerId}`, { dealId: deal.id });
+        await this.d.store.put(K.pass(p.id), { ...p, lastAddressOutcome: decision.outcome === "allow" ? "allow" : "deny" });
+      }
       if (decision.outcome === "allow") {
         address = await this.d.vault.decrypt(hh.addressCipher);
         porchInstructions = hh.porchInstructions;

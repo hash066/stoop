@@ -1,0 +1,23 @@
+{
+  "name": "@stoop/ops",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ops / judge-mode console: live events, policy decisions, deal state, frames, scenario buttons, Ring Playground live view.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "^5.7.3",
+    "vite": "^7.1.12"
+  }
+}
