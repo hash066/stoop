@@ -39,7 +39,7 @@ Follow [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) for the 3-minute flow. Every
 ## Tests and evals
 
 ```bash
-pnpm test           # 181 tests: policy (property-based), receipts, settlement, UCP, Ring, ring-sim, verifier, agents, MCP end-to-end (incl. Tasks)
+pnpm test           # 183 tests: policy (property-based), receipts, settlement, UCP, Ring, ring-sim, verifier, agents, MCP end-to-end (incl. Tasks + my_items)
 pnpm eval:redteam   # 300 adversarial conversations + 200 benign buyers -> evals/REPORT.md
 pnpm eval:poh       # proof-of-handoff confusion matrix -> evals/POH_REPORT.md
 ```
@@ -63,6 +63,22 @@ pnpm ring-sim replay
 pnpm ring-sim scenario golden
 ```
 
+## Fire TV (Garage Mode)
+
+`apps/firetv` is **Garage Mode**: the household's sellable things on the big screen. Pick items with
+the remote's D-pad, press **List selected**, approve on screen, and Stoop lists them — the footer
+shows the live sale line through to "Sold". It's built on Amazon's
+[`react-native-multi-tv-app-sample`](https://github.com/AmazonAppDev/react-native-multi-tv-app-sample)
+(MIT-0) and is a **real stateless MCP client** to the same stack (it holds no money or address keys;
+it only proposes). It is a **separate Yarn 4 workspace**, so use `corepack yarn`:
+
+```bash
+pnpm --filter @stoop/stack start      # the stack on :8787
+cd apps/firetv && corepack yarn install && corepack yarn dev:web   # open http://localhost:8082
+```
+
+See [`apps/firetv/README.md`](apps/firetv/README.md) for details and the Android TV build.
+
 ## Docs
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): components, protocols, truth table, local-vs-AWS mapping
@@ -81,7 +97,7 @@ pnpm ring-sim scenario golden
 packages/  shared · policy · proof-of-handoff · ui-cards
 services/  settlement · ring-bridge · verifier · agents · mcp-server · stack
 tools/     ring-sim (simulator-signed Ring webhooks)
-apps/      alexa-sim · pass · ops
+apps/      alexa-sim · pass · ops · firetv (Garage Mode, Yarn 4)
 evals/     red team + proof-of-handoff
 oss/       ring-api-helloworld contribution
 skills/    stoop/SKILL.md

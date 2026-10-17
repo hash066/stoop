@@ -18,7 +18,7 @@
 | **Amazon EventBridge** | Ring events and deal events fan-out | `EventBus` twin | local twin running |
 | **Amazon S3** | EXIF-stripped photos, evidence frames, receipts (versioned) | `LocalPhotoStore` | local twin running |
 | **Amazon SES** | Pickup-pass one-time code email | demo email outbox in Ops | local twin running |
-| **Kiro** | Spec-first development of the Policy Kernel (`.kiro/specs/policy-kernel`) | planned | planned |
+| **Kiro** | Spec-first development of the Policy Kernel. `.kiro/specs/policy-kernel/{requirements,design,tasks}.md` are committed; tasks 1–6 (presence-grace truth table, address release + audit, capture + property test, canonical-terms capability tokens, negotiation oracle, R13 purchase policy) were specced before implementation and are done; tasks 7–10 are the AWS adapters (KMS, DynamoDB, Step Functions, CDK) | `.kiro/specs/policy-kernel/`, `packages/policy` | spec written; tasks 1–6 done, 7–10 track the AWS deploy |
 | **Claude Code on Bedrock** | Development workflow (organizer-confirmed to count) | n/a | used once Bedrock access is active |
 
 ## Why this is a multi-service agentic pipeline, not "one Bedrock call"

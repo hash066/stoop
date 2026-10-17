@@ -109,7 +109,7 @@
 
 ## 5. Current state (verified Oct 17, commit `ab3cf8a`)
 
-`pnpm typecheck` is clean and `pnpm test` gives **181 passed**:
+`pnpm typecheck` is clean and `pnpm test` gives **183 passed**:
 
 | Suite | Tests |
 |---|---|
@@ -120,7 +120,7 @@
 | verifier | 4 |
 | ring-sim | 3 |
 | agents | 21 |
-| MCP end-to-end (golden, scrutiny, Tasks) | 15 |
+| MCP end-to-end (golden, scrutiny, Tasks, my_items) | 17 |
 
 **Evals (offline):**
 - Red team: Stoop leaked the address in 0/300 attacks and the floor in 0/300, and accepted 0/70 scams.
@@ -145,7 +145,7 @@
 | Red team + PoH evals | `evals/` | Done offline; the naive baseline needs `LLM_MODE=bedrock` |
 | Ring starter media-helpers contribution (Python + TS route + tests + `PR_DESCRIPTION.md`) | `oss/ring-api-helloworld` | Ready; PR needs the user's OK |
 | Kiro spec + CI workflow | `.kiro/`, `.github/workflows/ci.yml` | Written; CI hasn't run (no remote) |
-| **Fire TV Garage Mode** | `apps/firetv` | **WIP: never installed, typechecked or run** |
+| **Fire TV Garage Mode** | `apps/firetv` | Installed (Yarn 4, hoisted to root); `corepack yarn typecheck` clean; `expo export -p web` bundles (901 modules); stack serves its MCP calls. Interactive drive/screenshot + Android emulator still pending (see §8 Q1) |
 | AWS (CDK stack, KMS/DynamoDB/Step Functions adapters, AgentCore deploy) | `infra/` (doesn't exist yet) | **Not started; blocked on the user's AWS sign-in** |
 
 **Run it locally:**

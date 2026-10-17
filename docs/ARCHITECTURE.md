@@ -71,11 +71,12 @@ flowchart LR
 | Ring bridge | `services/ring-bridge` | Webhook HMAC verify + v1.1 normalization, the Partner API client (snapshot 303, clip 416/425, WHEP, 429/503), frame sources |
 | Verifier | `services/verifier` | `frame_needed` → frame → vision (categorical, no identity) → `recordFrame` |
 | Agents | `services/agents` | Strands Negotiator with guarded tools, Appraiser (vision + comps + CPSC rules), BuyerBot personas, host planner, and a ScriptedModel for offline runs |
-| MCP server | `services/mcp-server` | Seller and buyer tools, elicitation (form + URL), approval fallback, MCP Apps cards, sessions plus a stateless path |
+| MCP server | `services/mcp-server` | Seller and buyer tools (incl. the read-only `my_items` "what am I selling?" inventory), elicitation (form + URL), approval fallback, MCP Apps cards, sessions plus a stateless path |
 | Ring simulator | `tools/ring-sim` | CLI that sends simulator-signed Ring v1.1 webhooks (event, replay attack, scenarios) to a local or deployed stack |
 | Stack | `services/stack` | Local composition, the Marshal (issues passes), notifications, Ops SSE, pass API, `/verify`, simulator, planner endpoint, EXIF stripping |
 | Cards | `packages/ui-cards` | Six single-file MCP Apps on the official ext-apps `App` class |
 | Apps | `apps/alexa-sim`, `apps/pass`, `apps/ops` | Alexa+ device simulator (seller/buyer), buyer pickup pass, mission control |
+| Fire TV | `apps/firetv` | Garage Mode: a D-pad-driven Fire TV / Android TV app on Amazon's `react-native-multi-tv-app-sample` (MIT-0). A real stateless MCP client (seller tools + approval fallback); separate Yarn 4 workspace |
 
 ## The golden path
 
