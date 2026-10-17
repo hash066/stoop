@@ -47,6 +47,7 @@ export function App() {
   const [devOpen, setDevOpen] = useState(params.get("dev") === "1");
   const [rpc, setRpc] = useState<RpcLog[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [task, setTask] = useState<{ id: string; status: string; lines: Array<{ at: number; text: string }> }>();
   const [count, setCount] = useState(0);
   const [hasCard, setHasCard] = useState(false);
   const [token, setToken] = useState<string>();
@@ -67,7 +68,14 @@ export function App() {
           base: STACK,
           role: ROLE,
           token: tok,
-          onLog: (l) => setRpc((x) => [...x.slice(-200), l]),
+          onLog: (l) =>
+            setRpc((x) => {
+              const i = [x.length - 1, x.length - 2].find((k) => k >= 0 && x[k]!.dir === l.dir && x[k]!.summary === l.summary);
+              if (i === undefined) return [...x.slice(-200), l];
+              const y = [...x];
+              y[i] = { ...y[i]!, at: l.at, repeat: (y[i]!.repeat ?? 1) + 1 };
+              return y;
+            }),
           onElicit: (p) => {
             setCode("");
             setElicit(p);
@@ -260,6 +268,35 @@ export function App() {
   const clock = useClock();
   const roomLabel = ROLE === "seller" ? "Seller's kitchen" : "Buyer's living room";
 
+  // ---------- MCP Tasks: watch_handoff runs as a task; the device polls tasks/get (no server push here)
+  const watchSale = async () => {
+    if (!mcp) return;
+    try {
+      const created = await mcp.startTask("watch_handoff", {});
+      setTask({ id: created.taskId, status: created.status, lines: [] });
+    } catch (e) {
+      setTask({ id: "-", status: "failed", lines: [{ at: Date.now(), text: e instanceof Error ? e.message : String(e) }] });
+    }
+  };
+  useEffect(() => {
+    if (!mcp || !task || task.id === "-" || !["working", "input_required"].includes(task.status)) return;
+    const id = task.id;
+    const poll = setInterval(async () => {
+      const t = await mcp.taskStatus(id).catch(() => undefined);
+      if (!t) return;
+      let final: string | undefined;
+      if (t.status === "completed") final = resultText(await mcp.taskResult(id).catch(() => ({ content: [] }) as never)) || undefined;
+      setTask((cur) => {
+        if (!cur || cur.id !== id) return cur;
+        const lines = [...cur.lines];
+        if (t.statusMessage && lines.at(-1)?.text !== t.statusMessage) lines.push({ at: Date.now(), text: t.statusMessage });
+        if (final) lines.push({ at: Date.now(), text: `tasks/result: ${final}` });
+        return { ...cur, status: t.status, lines };
+      });
+    }, 2500);
+    return () => clearInterval(poll);
+  }, [mcp, task?.id, task?.status]);
+
   return (
     <div className="page">
       <div className={`device ${notice ? "notify" : ""}`}>
@@ -353,6 +390,39 @@ export function App() {
           <p className="muted small">
             MCP {ROLE} endpoint · session {mcp?.sessionId()?.slice(0, 8) ?? "–"} · protocol 2025-11-25 · judges only, never shown to customers
           </p>
+          {ROLE === "seller" && (
+            <>
+              <h3>MCP Tasks</h3>
+              {task ? (
+                <div className="task">
+                  <p className="num small">
+                    watch_handoff · task {task.id.slice(0, 8)} · <span className={`tstatus ${task.status}`}>{task.status}</span>
+                  </p>
+                  <ol className="tasklines">
+                    {task.lines.length === 0 && <li className="muted">waiting for the first status…</li>}
+                    {task.lines.map((l, i) => (
+                      <li key={i}>
+                        <span className="num">{new Date(l.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span> {l.text}
+                      </li>
+                    ))}
+                  </ol>
+                  {["working", "input_required"].includes(task.status) ? (
+                    <button className="ghost small" onClick={() => void mcp?.cancelTask(task.id).then(() => setTask({ ...task, status: "cancelled" }))}>
+                      Cancel task
+                    </button>
+                  ) : (
+                    <button className="ghost small" onClick={() => setTask(undefined)}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button className="ghost small" onClick={() => void watchSale()} disabled={!mcp}>
+                  Watch my sale as a task
+                </button>
+              )}
+            </>
+          )}
           <h3>Policy Kernel</h3>
           <ol className="decisions">
             {[...decisions].reverse().slice(0, 14).map((d) => (
@@ -369,6 +439,7 @@ export function App() {
             {[...rpc].reverse().slice(0, 60).map((l, i) => (
               <li key={i} className={l.dir}>
                 <span className="num">{l.dir === "out" ? "→" : "←"}</span> {l.summary}
+                {l.repeat ? <span className="num muted"> ×{l.repeat}</span> : null}
               </li>
             ))}
           </ol>

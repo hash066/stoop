@@ -2,7 +2,15 @@
 // Every JSON-RPC message in and out is logged for the judges' "Developer view".
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { ElicitRequestSchema, type CallToolResult, type Tool } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolResultSchema,
+  CancelTaskResultSchema,
+  CreateTaskResultSchema,
+  ElicitRequestSchema,
+  GetTaskResultSchema,
+  type CallToolResult,
+  type Tool,
+} from "@modelcontextprotocol/sdk/types.js";
 
 export interface RpcLog {
   dir: "out" | "in";
@@ -10,6 +18,8 @@ export interface RpcLog {
   method?: string;
   id?: string | number;
   summary: string;
+  /** Identical consecutive messages (task polling) are shown once with a count. */
+  repeat?: number;
 }
 
 export interface ElicitField {
@@ -29,9 +39,13 @@ export interface ElicitPrompt {
 
 function summarize(m: any): RpcLog {
   const base = { at: Date.now(), id: m?.id } as RpcLog;
-  if (m?.method) return { ...base, dir: "out", method: m.method, summary: m.method === "tools/call" ? `tools/call ${m.params?.name} ${JSON.stringify(m.params?.arguments ?? {})}` : m.method };
+  if (m?.method === "tools/call")
+    return { ...base, dir: "out", method: m.method, summary: `tools/call ${m.params?.name} ${JSON.stringify(m.params?.arguments ?? {})}${m.params?.task ? " +task" : ""}` };
+  if (m?.method) return { ...base, dir: "out", method: m.method, summary: m.params?.taskId ? `${m.method} ${String(m.params.taskId).slice(0, 8)}` : m.method };
   if (m?.result) {
     const r = m.result;
+    if (r.task?.taskId) return { ...base, dir: "in", summary: `task ${String(r.task.taskId).slice(0, 8)} created: ${r.task.status}` };
+    if (r.taskId && r.status) return { ...base, dir: "in", summary: `task ${r.status}${r.statusMessage ? `: ${String(r.statusMessage).slice(0, 120)}` : ""}` };
     const txt = r.content?.[0]?.text as string | undefined;
     return { ...base, dir: "in", summary: txt ? `result: ${txt.slice(0, 140)}` : `result ${Object.keys(r).join(",")}` };
   }
@@ -90,6 +104,13 @@ export async function connectMcp(opts: {
     async call(name: string, args: Record<string, unknown>) {
       return (await client.callTool({ name, arguments: args }, undefined, { timeout: 6 * 60 * 1000 })) as CallToolResult;
     },
+    /** MCP Tasks (experimental): run a tool as a task. The server can't push outside a request here, so callers poll taskStatus. */
+    async startTask(name: string, args: Record<string, unknown>, ttl = 60 * 60 * 1000) {
+      return (await client.request({ method: "tools/call", params: { name, arguments: args, task: { ttl } } }, CreateTaskResultSchema)).task;
+    },
+    taskStatus: (taskId: string) => client.request({ method: "tasks/get", params: { taskId } }, GetTaskResultSchema),
+    cancelTask: (taskId: string) => client.request({ method: "tasks/cancel", params: { taskId } }, CancelTaskResultSchema),
+    taskResult: (taskId: string) => client.request({ method: "tasks/result", params: { taskId } }, CallToolResultSchema) as Promise<CallToolResult>,
     async cardHtml(uri: string) {
       if (!cardCache.has(uri)) {
         const r = await client.readResource({ uri });

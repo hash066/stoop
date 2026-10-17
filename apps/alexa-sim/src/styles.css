@@ -98,3 +98,8 @@ button { font: inherit; cursor: pointer; }
   .typebox { flex: 1 1 100%; }
   .micbtn { width: 48px; height: 48px; }
 }
+.task .tstatus { font-weight: 700; } .task .tstatus.completed { color: var(--ok); } .task .tstatus.failed, .task .tstatus.cancelled { color: var(--bad); } .task .tstatus.working { color: var(--amber); }
+.tasklines { list-style: none; margin: 6px 0 8px; padding: 0; font-size: 12.5px; }
+.tasklines li { padding: 4px 0; border-top: 1px solid var(--rule); }
+.tasklines li .num { color: var(--muted); margin-right: 4px; }
+button.small { font-size: 12.5px; padding: 6px 10px; }
