@@ -124,7 +124,7 @@
 | **Address boundary** | `services/settlement/src/boundary.ts` | Done. All address plaintext goes through it; re-derives R2 from the store |
 | **AWS adapters** (Kiro tasks 7–9) | `services/settlement/src/aws/` (`@stoop/settlement/aws`) | Done, unit-tested with `aws-sdk-client-mock` |
 | **CDK StoopStack** (task 10) | `infra/` | `cdk synth` clean; **not deployed** (activation) |
-| Ring Playground run (Oct 18) | `/ring/snapshot/:deviceId`, `/ring/bind`, Ops buttons | **Live view (WHEP) works** with a Playground token. Image download returns 416 MEDIA_NOT_FOUND (the virtual device has no recordings); now handled as "no recording" → camera unavailable → dual-confirm path. A real snapshot needs a physical Ring device |
+| Ring Playground run (Oct 18) | `/ring/snapshot/:deviceId`, `/ring/bind`, Ops buttons | Token auth + device listing work (one device listed; the user owns no Ring hardware). Image download returns 416 MEDIA_NOT_FOUND, now handled as "no recording" → camera unavailable → dual-confirm path. **Live view NOT verified.** Real media needs a physical Ring device; the demo uses the built-in signed simulator + labelled footage |
 | MCP Tasks UI | alexa-sim Developer view → "Watch my sale as a task" | Done, checked in Chrome |
 | Architecture diagram | `docs/architecture.svg` + `.png` | Done (solid = running, dashed = AWS pending) |
 | Devpost draft | `docs/SUBMISSION.md` | Drafted; TODOs listed at the top |

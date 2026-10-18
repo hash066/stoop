@@ -47,7 +47,7 @@ AI agents already sell for people. In late September 2026 a Big Tech shopping ag
 | UCP checkout endpoints (Alexa+ add-on contract 2026-04-08) | Payment processor: a sandbox PSP with manual-capture semantics, labelled "Test PSP" |
 | Strands agents on Amazon Bedrock Nova 2 Lite (live run verified Oct 17) | Ring events in the demo: simulator-signed (the Playground doesn't send webhooks), labelled on screen |
 | Policy Kernel, capability tokens, ES256 receipts, `/verify` | Porch frames: TODO(team) our own labelled footage (placeholders until it lands) |
-| Ring Partner API: device discovery and **live view (WHEP) verified against the Ring Developer Playground** (Oct 18) | Snapshots: the Playground's virtual device has no recordings, so image download answers `MEDIA_NOT_FOUND`; demo frames are our labelled footage |
+| Ring Partner API client: token auth and device listing checked with a Developer Playground token (Oct 18); snapshots, clips and WHEP live view implemented and unit-tested | No physical Ring device: the one device the Playground token lists has no recordings (image download answers `MEDIA_NOT_FOUND`), and live view wasn't verified. Doorbell events come from our signed simulator and porch frames are our labelled footage |
 | AWS adapters + CDK stack, unit-tested | TODO: deployed once the account finishes activation |
 
 ## Architecture

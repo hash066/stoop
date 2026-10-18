@@ -52,7 +52,7 @@
   - Simulated streams can't drive motion or doorbell events.
   - Real devices are US-only.
 - **Ring Appstore knowledge MCP server** (`knowledge.appstore-mcp.ring.amazon.dev/mcp`): `search_docs` answered our exact question (what a 416 on image download means and how to get an image) on the first try. A docs MCP server is the right call for agent-assisted development.
-- **Onboarding:** the Playground session (Oct 18) connected and streamed live view (WHEP) within minutes. Image download can't be exercised there: the virtual device has no recordings (friction #19).
+- **Onboarding:** a Playground token worked against the API within minutes (auth, device listing). Without a physical Ring device nothing else could be exercised: the listed device has no recordings, so image download returns `MEDIA_NOT_FOUND`, and the docs say to test with your own Ring account and devices (friction #19).
 - **Build again?** Yes. Ring as a *commerce sensor* is a large non-security category.
 
 ## Strands Agents (TypeScript, `@strands-agents/sdk` 1.21)
