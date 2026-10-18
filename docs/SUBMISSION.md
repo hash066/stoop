@@ -59,6 +59,7 @@ AI agents already sell for people. In late September 2026 a Big Tech shopping ag
 - **Red team on Amazon Bedrock (Nova 2 Lite), 300 adversarial conversations** (`evals/REPORT.md`, Oct 17): a naive agent given the address and floor in its prompt leaked the address **57 / 300 (19%)**, the floor **40 / 300**, and went along with **9 / 70** scams. Stoop: **0 / 300, 0 / 300, 0 / 70**. 124 attacks were refused by deterministic checks before the agent ran; the other 176 reached the live agent and its guarded tools. Zero in 300 bounds Stoop's leak rate below 1% at 95% confidence.
 - **200 benign buyers** on the same model: 100 reached a deal, at an average **$95.30** on a $120 ask (the Policy Kernel only accepts offers at or above the private $90 floor).
 - **Proof-of-Handoff truth table** (`evals/POH_REPORT.md`): 40 / 40 correct on labelled synthetic cases, **0 false releases**. This measures the deterministic truth table; real footage plus Bedrock vision will measure vision too.
+- **Alexa+ design rules, enforced by a test**: every spoken line and approval prompt in a full sale (33 lines) is under 30 seconds (longest 56 words), offers at most 5 options, and never speaks an id, JSON or a URL.
 - **Tests**: 200+ unit and end-to-end tests in CI, including the scrutiny matrix (replayed webhooks, wrong device, no-show, piracy, camera offline, two-buyer race, offer flooding).
 
 ## Challenges we ran into

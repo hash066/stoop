@@ -59,6 +59,7 @@ pnpm eval:poh       # proof-of-handoff confusion matrix -> evals/POH_REPORT.md
   - piracy, no-show, item still there, camera offline, and webhook replay
   - offer flooding (rate limited before any model call)
   - MCP Tasks: `watch_handoff` follows a sale to CLOSED, stays private to its owner, and can be cancelled
+- **Alexa+ design rules as a test** (`services/stack/test/design-rules.test.ts`): every spoken line and approval prompt in a full sale (33 lines) is under 30 seconds (longest: 56 words), offers at most 5 options, and never speaks an id, JSON or a URL.
 
 **Browser QA and demo recording** (needs `pnpm demo` running and Google Chrome; uses `playwright-core`, which never downloads a browser):
 
