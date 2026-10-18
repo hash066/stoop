@@ -38,7 +38,7 @@ Follow [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) for the 3-minute flow. Every
 |---|---|
 | MCP servers (spec 2025-11-25, Streamable HTTP, sessions, form + URL elicitation, structured output, MCP Apps) | The Alexa+ client: add-on tooling is partner-only, so we built a device simulator that is a **real MCP client and MCP Apps host** |
 | UCP checkout endpoints matching the Alexa+ add-on contract (2026-04-08) | Payment processor: `SandboxPSP` with Stripe manual-capture semantics ("Test PSP") |
-| Ring Partner API client (snapshots, clips, WHEP live view), HMAC webhook ingest | Ring events from our signed simulator (the Playground doesn't deliver webhooks; a judge confirmed own simulators are fine), plus our own labelled porch footage |
+| Ring Partner API client (snapshots, clips, WHEP live view), HMAC webhook ingest. Live view verified against the Ring Developer Playground (Oct 18) | Ring events from our signed simulator (the Playground doesn't deliver webhooks; a judge confirmed own simulators are fine), plus our own labelled porch footage |
 | Strands agents, the Policy Kernel, KMS-style tokens and ES256 receipts | Offline `ScriptedModel` and footage-label vision until Bedrock access is active |
 
 ## Tests and evals

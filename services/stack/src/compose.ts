@@ -11,7 +11,7 @@ import { Appraiser, cpscChecker, llmMode, Negotiator, planTurn, rulesOnlyChecker
 import { loadCards, mcpRouter, type BuyerActor, type SellerActor, type StoopContext } from "@stoop/mcp-server";
 import { localHmacProvider, memorySpentStore } from "@stoop/policy";
 import { localSigner, verifyReceipt } from "proof-of-handoff";
-import { buildEnvelope, FootageSource, RingClient, RingSnapshotSource, ringWebhookRouter, signBody, type FrameSource, type Scene } from "@stoop/ring-bridge";
+import { buildEnvelope, FootageSource, RingApiError, RingClient, RingSnapshotSource, ringWebhookRouter, signBody, type FrameSource, type Scene } from "@stoop/ring-bridge";
 import {
   EventBus,
   localVault,
@@ -402,10 +402,15 @@ export async function createStack(cfg: StackConfig) {
     const deviceId = c.req.param("deviceId");
     try {
       const now = Date.now();
-      const s = await ringClient.snapshot(deviceId, { type: "latest_in_range", startTimestamp: now - 10 * 60_000, endTimestamp: now });
+      // latest existing image in the last 6 h (the endpoint never takes a new one)
+      const s = await ringClient.snapshot(deviceId, { type: "latest_in_range", startTimestamp: now - 6 * 60 * 60_000, endTimestamp: now });
       bus.emit({ type: "ring_snapshot", at: clock.now(), deviceId, bytes: s.bytes.length, mediaTimestamp: s.mediaTimestamp });
       return new Response(Buffer.from(s.bytes), { headers: { "Content-Type": s.mime, "Cache-Control": "no-store", "X-Frame-Origin": "ring" } });
     } catch (e) {
+      if (e instanceof RingApiError && e.noMedia) {
+        bus.emit({ type: "ring_no_recording", at: clock.now(), deviceId });
+        return c.json({ error: "no_recording", message: "This device has no recording in the last 6 hours. Ring returns existing images only: a doorbell press, motion or a live view on a real device records one." }, 404);
+      }
       bus.emit({ type: "ring_api_error", at: clock.now(), error: String(e) });
       return c.json({ error: "ring_api_error", message: String(e) }, 502);
     }

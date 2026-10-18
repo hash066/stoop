@@ -1,7 +1,7 @@
 // Verifier: reacts to `frame_needed`, fetches a frame, asks vision, records the observation.
 // The verdict itself is computed by Settlement with the deterministic truth table.
 import { createHash } from "node:crypto";
-import { CameraOfflineError, type Frame, type FrameSource } from "@stoop/ring-bridge";
+import { CameraOfflineError, NoMediaError, type Frame, type FrameSource } from "@stoop/ring-bridge";
 import type { ItemPresence } from "@stoop/shared";
 import type { VisionAdapter, VisionVerdict } from "./vision.ts";
 
@@ -66,10 +66,16 @@ export class Verifier {
     }
     let frame: Frame;
     try {
-      frame = await this.d.frames.getFrame(deviceId, this.d.now());
+      frame = await this.d.frames.getFrame(deviceId, this.d.now(), { kind: req.kind });
     } catch (e) {
       if (e instanceof CameraOfflineError) {
         await this.d.sink.setCameraStatus(req.dealId, "offline");
+        return;
+      }
+      // No recording to look at is never evidence: the deal falls back to the capped dual-confirm path
+      if (e instanceof NoMediaError) {
+        this.d.log?.("no_recording", { dealId: req.dealId, kind: req.kind });
+        await this.d.sink.setCameraStatus(req.dealId, "unavailable");
         return;
       }
       throw e;

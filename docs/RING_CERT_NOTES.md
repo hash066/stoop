@@ -6,7 +6,7 @@
 
 - **Ring data used:**
   - `motion_detected` (`sub_type`) and `button_press` webhooks for the linked doorbell
-  - image snapshots at pickup-window checkpoints (before / after)
+  - two existing images per pickup: the latest before the pickup window and the latest from the visit. Stoop never asks the camera to record; Ring's image download only returns images already captured (a press, motion or live view). If there is none, Stoop treats the camera as unavailable and the sale needs both people's confirmation, so a missing image is never evidence
   - optional short evidence clips
 - **Purpose:** decide whether a scheduled pickup happened (item present before, absent after, buyer checked in, doorbell saw a visitor). Nothing else.
 - **Identity:**

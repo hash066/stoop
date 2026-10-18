@@ -1,6 +1,8 @@
+import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
+import { mockClient } from "aws-sdk-client-mock";
 import { describe, expect, it } from "vitest";
-import { FootageSource } from "@stoop/ring-bridge";
-import { LabelVision, parseVisionJson, Verifier, type EvidenceSink } from "../src/index.ts";
+import { FootageSource, NoMediaError } from "@stoop/ring-bridge";
+import { BedrockVision, LabelVision, parseVisionJson, Verifier, type EvidenceSink } from "../src/index.ts";
 
 function sink(state = "WINDOW_OPEN") {
   const frames: Array<{ kind: string; presence: string; origin: string }> = [];
@@ -47,6 +49,22 @@ describe("Verifier", () => {
     expect(frames).toHaveLength(0);
   });
 
+  it("no recording at the time (Ring 416) -> camera unavailable, never a frame", async () => {
+    const asked: Array<{ kind?: string }> = [];
+    const src = {
+      name: "ring_snapshot",
+      async getFrame(_dev: string, _at: number, opts?: { kind?: "before" | "after" }) {
+        asked.push({ kind: opts?.kind });
+        throw new NoMediaError("no recording");
+      },
+    };
+    const { s, cams, frames } = sink();
+    await new Verifier({ sink: s, frames: src, vision: new LabelVision(), now: () => 0, delay: immediate }).capture({ dealId: "d1", kind: "after" });
+    expect(asked).toEqual([{ kind: "after" }]); // the source picks its lookback per frame kind
+    expect(cams).toEqual(["unavailable"]);
+    expect(frames).toHaveLength(0);
+  });
+
   it("ignores deals that are no longer waiting for evidence", async () => {
     const src = new FootageSource("x", { item_present: [], item_absent: [], unclear: [] });
     const { s, frames } = sink("CLOSED");
@@ -63,9 +81,6 @@ describe("Verifier", () => {
 
 describe("BedrockVision input hygiene", () => {
   it("drops reference photos Bedrock can't take (SVG) instead of failing the whole check", async () => {
-    const { mockClient } = await import("aws-sdk-client-mock");
-    const { BedrockRuntimeClient, ConverseCommand } = await import("@aws-sdk/client-bedrock-runtime");
-    const { BedrockVision } = await import("../src/index.ts");
     const bedrock = mockClient(BedrockRuntimeClient);
     bedrock.on(ConverseCommand).resolves({ output: { message: { role: "assistant", content: [{ text: '{"item":"absent","rationale":"porch is empty","personCount":0}' }] } } } as never);
     const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]);

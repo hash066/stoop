@@ -4,6 +4,7 @@
 // 429 honours Retry-After; 503 = device offline; E2EE devices are excluded.
 
 export const RING_API_BASE = "https://api.amazonvision.com";
+const NO_MEDIA = "No recording exists in that time range. Image download returns existing images only; a doorbell press, motion or a live view records them.";
 
 export class RingApiError extends Error {
   constructor(
@@ -18,6 +19,10 @@ export class RingApiError extends Error {
   }
   get tokenExpired() {
     return this.status === 401;
+  }
+  /** 416 MEDIA_NOT_FOUND: nothing was recorded at that time (image download never captures a new image). */
+  get noMedia() {
+    return this.status === 416;
   }
 }
 
@@ -118,10 +123,12 @@ export class RingClient {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...body, image_options: { format: "jpeg", resolution: { width: 1920, height: 1080 } } }),
     });
+    if (res.status === 416) throw new RingApiError(416, "MEDIA_NOT_FOUND", NO_MEDIA);
     if (res.status !== 303) return this.fail(res);
     const location = res.headers.get("Location");
     if (!location) throw new RingApiError(502, "missing_location", "Snapshot 303 without Location header");
     const img = await this.f(location); // pre-signed: no Authorization header
+    if (img.status === 416) throw new RingApiError(416, "MEDIA_NOT_FOUND", NO_MEDIA);
     if (!img.ok) throw new RingApiError(img.status, "snapshot_fetch_failed", img.statusText);
     const ts = res.headers.get("X-Media-Timestamp");
     return {

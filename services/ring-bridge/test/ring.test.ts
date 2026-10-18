@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RingEvent } from "@stoop/shared";
-import { buildEnvelope, normalizeEnvelope, ringWebhookRouter, RingClient, RingApiError, signBody, verifySignature } from "../src/index.ts";
+import { buildEnvelope, FRAME_LOOKBACK_MS, NoMediaError, normalizeEnvelope, ringWebhookRouter, RingClient, RingApiError, RingSnapshotSource, signBody, verifySignature } from "../src/index.ts";
 
 const KEY = "ring-hmac-key";
 const SIM = "sim-key";
@@ -105,6 +105,33 @@ describe("RingClient", () => {
     expect(Array.from(snap.bytes)).toEqual([1, 2, 3]);
     expect(snap.mediaTimestamp).toBe(123);
     expect(presignedAuth).toBeNull();
+  });
+
+  it("snapshot with no recording (416 at either step) is MEDIA_NOT_FOUND; the frame source looks back per kind", async () => {
+    const bodies: Array<{ type: string; start_timestamp?: number; end_timestamp?: number }> = [];
+    const { f } = fakeFetch([
+      (u, init) => {
+        if (!u.endsWith("/media/image/download")) return undefined;
+        bodies.push(JSON.parse(String(init?.body)));
+        return new Response(null, { status: 303, headers: { Location: "https://s3.example/none.jpg" } });
+      },
+      (u) => (u === "https://s3.example/none.jpg" ? new Response('{"errors":[{"code":"MEDIA_NOT_FOUND"}]}', { status: 416 }) : undefined),
+    ]);
+    const c = new RingClient({ getToken: async () => "tok", fetchImpl: f });
+    const err = await c.snapshot("dev1", { type: "latest_in_range", startTimestamp: 1 }).catch((e) => e);
+    expect(err).toBeInstanceOf(RingApiError);
+    expect(err.noMedia).toBe(true);
+    expect(err.code).toBe("MEDIA_NOT_FOUND");
+
+    const at = 10 * 60 * 60 * 1000;
+    const src = new RingSnapshotSource(c);
+    await expect(src.getFrame("dev1", at, { kind: "before" })).rejects.toBeInstanceOf(NoMediaError);
+    await expect(src.getFrame("dev1", at, { kind: "after" })).rejects.toBeInstanceOf(NoMediaError);
+    expect(bodies.slice(1).map((b) => at - b.start_timestamp!)).toEqual([FRAME_LOOKBACK_MS.before, FRAME_LOOKBACK_MS.after]);
+
+    const direct = fakeFetch([(u) => (u.endsWith("/media/image/download") ? new Response(null, { status: 416 }) : undefined)]);
+    const err2 = await new RingClient({ getToken: async () => "tok", fetchImpl: direct.f }).snapshot("dev1", { type: "at_timestamp", timestamp: 1 }).catch((e) => e);
+    expect(err2.noMedia).toBe(true);
   });
 
   it("retries clips on 425 then succeeds; 503 maps to offline", async () => {

@@ -19,20 +19,32 @@ export interface Frame {
 
 export interface FrameSource {
   readonly name: string;
-  getFrame(deviceId: string, at: number): Promise<Frame>;
+  getFrame(deviceId: string, at: number, opts?: { kind?: "before" | "after" }): Promise<Frame>;
 }
 
 export class CameraOfflineError extends Error {}
+/** The camera is online but has no recording in the range (no press, motion or live view; or no recording plan). */
+export class NoMediaError extends Error {}
+
+/**
+ * How far back to look for an existing image. Ring's image download never captures a new image, so
+ * "now" usually has nothing: the before frame takes the latest recording up to the window (when the
+ * seller set the item out), the after frame the latest from the visit (the doorbell press and the
+ * motion after it). The frame's own timestamp is kept as evidence.
+ */
+export const FRAME_LOOKBACK_MS = { before: 6 * 60 * 60 * 1000, after: 5 * 60 * 1000 } as const;
 
 export class RingSnapshotSource implements FrameSource {
   readonly name = "ring_snapshot";
   constructor(private client: RingClient) {}
-  async getFrame(deviceId: string, at: number): Promise<Frame> {
+  async getFrame(deviceId: string, at: number, opts: { kind?: "before" | "after" } = {}): Promise<Frame> {
+    const lookback = FRAME_LOOKBACK_MS[opts.kind ?? "after"];
     try {
-      const s = await this.client.snapshot(deviceId, { type: "latest_in_range", startTimestamp: at - 60_000, endTimestamp: at + 60_000 });
+      const s = await this.client.snapshot(deviceId, { type: "latest_in_range", startTimestamp: at - lookback, endTimestamp: at + 60_000 });
       return { bytes: s.bytes, mime: s.mime, at: s.mediaTimestamp ?? at, origin: "ring", sourceName: this.name };
     } catch (e) {
       if (e instanceof RingApiError && e.offline) throw new CameraOfflineError("device offline");
+      if (e instanceof RingApiError && e.noMedia) throw new NoMediaError(e.message);
       throw e;
     }
   }

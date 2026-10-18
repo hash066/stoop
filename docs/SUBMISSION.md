@@ -6,7 +6,7 @@
 > - [ ] TODO: YouTube link (≤ 3:00, public, English captions)
 > - [ ] TODO: live judge URL, once the AWS account finishes activation
 > - [ ] TODO: links for the two market figures below (OfferUp report; MPB survey), or drop them
-> - [ ] TODO: real Ring Playground snapshot + real porch footage, then update "real vs simulated"
+> - [ ] TODO: real porch footage; a real Ring snapshot needs a physical Ring device (the Playground's virtual device has no recordings)
 
 **Tracks:** Alexa+ (primary), Ring. **Minis:** AWS Builder, Open Source.
 **Repo:** https://github.com/hash066/stoop (MIT)
@@ -47,7 +47,7 @@ AI agents already sell for people. In late September 2026 a Big Tech shopping ag
 | UCP checkout endpoints (Alexa+ add-on contract 2026-04-08) | Payment processor: a sandbox PSP with manual-capture semantics, labelled "Test PSP" |
 | Strands agents on Amazon Bedrock Nova 2 Lite (live run verified Oct 17) | Ring events in the demo: simulator-signed (the Playground doesn't send webhooks), labelled on screen |
 | Policy Kernel, capability tokens, ES256 receipts, `/verify` | Porch frames: TODO(team) our own labelled footage (placeholders until it lands) |
-| Ring Partner API client: snapshots, clips, WHEP | TODO: first real Playground snapshot |
+| Ring Partner API: device discovery and **live view (WHEP) verified against the Ring Developer Playground** (Oct 18) | Snapshots: the Playground's virtual device has no recordings, so image download answers `MEDIA_NOT_FOUND`; demo frames are our labelled footage |
 | AWS adapters + CDK stack, unit-tested | TODO: deployed once the account finishes activation |
 
 ## Architecture
