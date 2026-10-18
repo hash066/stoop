@@ -269,13 +269,15 @@ function App() {
             className="ring"
             onSubmit={async (e) => {
               e.preventDefault();
-              await post("/ring/token", { token: ringToken });
+              // Empty field = use the token the stack started with (RING_ACCESS_TOKEN); never overwrite it with ""
+              if (ringToken.trim()) await post("/ring/token", { token: ringToken.trim() });
+              setRingToken(""); // don't keep the token in the page once the stack has it
               const r = await (await fetch(`${STACK}/ring/devices`)).json();
               setDevices(r.devices ?? []);
               setRingMsg(r.message ?? `${r.devices?.length ?? 0} device(s)`);
             }}
           >
-            <input type="password" placeholder="Paste a Playground token (30-min)" value={ringToken} onChange={(e) => setRingToken(e.target.value)} aria-label="Ring Playground token" />
+            <input type="password" placeholder="Paste a Playground token, or leave empty if the stack has one" value={ringToken} onChange={(e) => setRingToken(e.target.value)} aria-label="Ring Playground token" />
             <button>Connect</button>
           </form>
           {devices.map((d) => (
