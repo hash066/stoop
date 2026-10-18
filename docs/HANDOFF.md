@@ -114,7 +114,7 @@
 ## 5. Current state (verified Oct 17, 22:30 IST)
 
 - **Public repo:** https://github.com/hash066/stoop (MIT). CI (`.github/workflows/ci.yml`) is green on every push: typecheck, all tests, offline evals, the OSS helper tests.
-- `pnpm typecheck` is clean and the suite is **203 tests**: receipts 6, policy 86, ring-bridge 8, settlement + UCP + AWS adapters 52, verifier 5, ring-sim 3, agents 24, MCP end-to-end 19.
+- `pnpm typecheck` is clean and the suite is **205 tests**: receipts 6, policy 86, ring-bridge 9, settlement + UCP + AWS adapters 52, verifier 6, ring-sim 3, agents 24, MCP end-to-end 19.
 - **Live Bedrock golden path verified:** appraise → list → haggle (incl. an injection attempt) → $95 → hold → doorbell → VERIFIED → receipt VALID, 18.6 s from India (each negotiator turn ~3.5 s for about two model calls; Bedrock itself answers in ~0.7 s per call, the rest is the network from India). Found and fixed: SVG placeholders sent to Bedrock broke the appraisal.
 - **Red team on live Bedrock** (`evals/REPORT.md`, 300 attacks, Nova 2 Lite): naive agent leaked the address 57/300 (19%), floor 40/300, scams 9/70; Stoop 0/300, 0/300, 0/70 (124 refused before the agent ran, 176 reached it). Benign: 100/200 deals, avg $95.30. The run took 101 minutes.
 
@@ -124,7 +124,7 @@
 | **Address boundary** | `services/settlement/src/boundary.ts` | Done. All address plaintext goes through it; re-derives R2 from the store |
 | **AWS adapters** (Kiro tasks 7–9) | `services/settlement/src/aws/` (`@stoop/settlement/aws`) | Done, unit-tested with `aws-sdk-client-mock` |
 | **CDK StoopStack** (task 10) | `infra/` | `cdk synth` clean; **not deployed** (activation) |
-| Ring Playground run | `/ring/snapshot/:deviceId`, `/ring/bind`, Ops buttons | Code ready; needs the user's token |
+| Ring Playground run (Oct 18) | `/ring/snapshot/:deviceId`, `/ring/bind`, Ops buttons | **Live view (WHEP) works** with a Playground token. Image download returns 416 MEDIA_NOT_FOUND (the virtual device has no recordings); now handled as "no recording" → camera unavailable → dual-confirm path. A real snapshot needs a physical Ring device |
 | MCP Tasks UI | alexa-sim Developer view → "Watch my sale as a task" | Done, checked in Chrome |
 | Architecture diagram | `docs/architecture.svg` + `.png` | Done (solid = running, dashed = AWS pending) |
 | Devpost draft | `docs/SUBMISSION.md` | Drafted; TODOs listed at the top |
