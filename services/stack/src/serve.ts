@@ -3,6 +3,7 @@
 //
 //   PORT=8080            listen port (0.0.0.0)
 //   PUBLIC_ORIGIN        https://… as browsers see it (else derived from X-Forwarded-* / Host)
+//   PUBLIC_PROTO=https   behind a proxy that forwards Host but not X-Forwarded-Proto (CloudFront)
 //   DATA_DIR             where feedback.jsonl goes (default <repo>/.data)
 //   ADMIN_KEY            enables GET /api/feedback.jsonl?key=…
 //   MAX_SANDBOXES        concurrent worlds (default 60), SANDBOX_IDLE_MIN (default 30)
@@ -18,6 +19,7 @@ const port = Number(process.env.PORT ?? 8080);
 const server = await createSandboxServer({
   rootDir: root,
   origin: process.env.PUBLIC_ORIGIN,
+  publicProto: process.env.PUBLIC_PROTO,
   dataDir: process.env.DATA_DIR ?? resolve(root, ".data"),
   adminKey: process.env.ADMIN_KEY,
   maxWorlds: Number(process.env.MAX_SANDBOXES ?? 60),

@@ -114,7 +114,7 @@
 ## 5. Current state (verified Oct 17, 22:30 IST)
 
 - **Public repo:** https://github.com/hash066/stoop (MIT). CI (`.github/workflows/ci.yml`) is green on every push: typecheck, all tests, offline evals, the OSS helper tests.
-- `pnpm typecheck` is clean and the suite is **205 tests**: receipts 6, policy 86, ring-bridge 9, settlement + UCP + AWS adapters 52, verifier 6, ring-sim 3, agents 24, MCP end-to-end 19.
+- `pnpm typecheck` is clean and the suite is **211 tests**: receipts 6, policy 86, ring-bridge 9, settlement + UCP + AWS adapters 52, verifier 6, ring-sim 3, agents 24, MCP end-to-end + hosted mode + design rules 25.
 - **Live Bedrock golden path verified:** appraise → list → haggle (incl. an injection attempt) → $95 → hold → doorbell → VERIFIED → receipt VALID, 18.6 s from India (each negotiator turn ~3.5 s for about two model calls; Bedrock itself answers in ~0.7 s per call, the rest is the network from India). Found and fixed: SVG placeholders sent to Bedrock broke the appraisal.
 - **Red team on live Bedrock** (`evals/REPORT.md`, 300 attacks, Nova 2 Lite): naive agent leaked the address 57/300 (19%), floor 40/300, scams 9/70; Stoop 0/300, 0/300, 0/70 (124 refused before the agent ran, 176 reached it). Benign: 100/200 deals, avg $95.30. The run took 101 minutes.
 
@@ -128,6 +128,9 @@
 | MCP Tasks UI | alexa-sim Developer view → "Watch my sale as a task" | Done, checked in Chrome |
 | Architecture diagram | `docs/architecture.svg` + `.png` | Done (solid = running, dashed = AWS pending) |
 | Devpost draft | `docs/SUBMISSION.md` | Drafted; TODOs listed at the top |
+| **Hosted mode** (Oct 18) | `services/stack/src/{sandboxes,site,serve}.ts`, `Dockerfile` | Landing + guided tour + private sandbox per visitor + feedback survey. `pnpm tour` passes in 44 s (also from a fresh clone with the image's exact commands). Not online yet: see `docs/DEPLOY.md` |
+| Alexa+ design rules test | `services/stack/test/design-rules.test.ts` | 33 spoken lines: ≤75 words (longest 56), ≤5 options, no ids/JSON/URLs |
+| AWS host stack | `infra/lib/host-stack.ts` (`StoopHostStack`) | Synth clean; public (offline) + judge (Bedrock) sites behind CloudFront; deploy when activation clears |
 | OSS: Ring starter media helpers | `oss/ring-api-helloworld` | **PR open:** AmazonAppDev/ring-api-helloworld#36 (issue #35) |
 | OSS: `proof-of-handoff` (renamed from `@stoop/…`) | `packages/proof-of-handoff` | Publish-ready (tarball tested in a clean dir); **the user publishes** |
 | Fire TV Garage Mode | `apps/firetv` | Web target works; Android TV emulator deferred (user decides later) |
@@ -142,6 +145,7 @@
 4. ~~Wire the stack to AWS~~ **Done:** `STOOP_AWS_OUTPUTS=infra/outputs.json pnpm stack` runs Settlement on DynamoDB, KMS, the Vault Lambda and Step Functions → SQS (`awsSettlementDeps` in `services/settlement/src/aws/wiring.ts`); Ops shows a "settlement: AWS" chip. Unit-tested; first real run happens after the deploy.
 
 ### P1: blocked on the user (ask; never work around it)
+- **Testers by Monday (the user's goal):** deploy `StoopHostStack` first (`docs/DEPLOY.md`), run `pnpm tour <PublicUrl> <key>`, then the user sends `docs/TESTERS.md`'s message. If AWS is still blocked, offer the Render fallback in DEPLOY.md (the user chose "wait for AWS" on Oct 18; re-ask before switching).
 - **AWS activation.** The user checks the console/billing for a pending verification step or contacts AWS Support. Then: `pnpm --filter @stoop/infra exec cdk bootstrap aws://428516841578/us-east-1 --profile stoop`, `pnpm --filter @stoop/infra deploy`, an integration run against real AWS, and the video shot: `aws kms decrypt` on an address as root → AccessDenied.
 - **Hosting in us-east-1** (EC2 + CloudFront, or AgentCore for the agents) once EC2 activates. Then the Negotiator on AgentCore Runtime with tools calling Settlement over HTTP, AgentCore Observability screenshots, and a judge URL in the README.
 - **npm:** the user runs `npm login`, then `pnpm --filter proof-of-handoff publish --no-git-checks` (the `prepack` builds `dist/`). Afterwards add the npm link to README and SUBMISSION.

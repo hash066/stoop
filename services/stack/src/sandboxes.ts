@@ -22,6 +22,8 @@ export interface SandboxServerOptions {
   rootDir: string;
   /** Public origin (https://…). Default: from X-Forwarded-* or the request URL. */
   origin?: string;
+  /** Scheme browsers use when no X-Forwarded-Proto arrives (behind CloudFront: "https"). */
+  publicProto?: string;
   maxWorlds?: number;
   idleMs?: number;
   createsPerIpPerHour?: number;
@@ -78,7 +80,7 @@ export async function createSandboxServer(o: SandboxServerOptions) {
 
   const originOf = (c: Context) => {
     if (o.origin) return o.origin.replace(/\/$/, "");
-    const proto = c.req.header("x-forwarded-proto")?.split(",")[0]?.trim();
+    const proto = c.req.header("x-forwarded-proto")?.split(",")[0]?.trim() ?? o.publicProto;
     const host = c.req.header("x-forwarded-host")?.split(",")[0]?.trim() ?? c.req.header("host");
     return proto && host ? `${proto}://${host}` : new URL(c.req.url).origin;
   };

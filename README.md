@@ -32,6 +32,18 @@ pnpm demo
 
 Follow [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) for the 3-minute flow. Everything runs offline by default. `LLM_MODE=bedrock` switches agents and vision to Amazon Bedrock (see [`.env.example`](.env.example)).
 
+### Hosted mode: what testers and judges get
+
+One server with a landing page, a guided 7-step tour, and a private sandbox per visitor (nobody sees anyone else's sales). The tour's chips speak on the right simulated device, the doorbell plays the pickup, and a 4-question survey closes it.
+
+```bash
+pnpm build:web
+PORT=8080 ADMIN_KEY=local pnpm serve       # http://localhost:8080
+pnpm tour http://localhost:8080 local      # drives the whole tour in Chrome
+```
+
+Docker image: `Dockerfile`. AWS deployment (CloudFront + one instance, a public site with offline agents and a judge site on Bedrock): [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
 ## What's real and what's simulated
 
 | Real | Simulated (by hackathon rule or necessity), always labelled |
