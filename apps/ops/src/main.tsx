@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-const STACK = (import.meta.env.VITE_STACK_URL as string | undefined) ?? "http://localhost:8787";
+// Hosted sandboxes inject window.__STOOP__ (the visitor's own stack under /s/<id>); local dev uses :8787
+const RT = (window as unknown as { __STOOP__?: { stack?: string; public?: boolean } }).__STOOP__;
+const STACK = RT?.stack ? new URL(RT.stack, location.origin).href.replace(/\/$/, "") : ((import.meta.env.VITE_STACK_URL as string | undefined) ?? "http://localhost:8787");
 
 interface Ev {
   type: string;
@@ -264,6 +266,9 @@ function App() {
             ))}
           </ul>
 
+          {/* public sandboxes have no Ring account: the simulator buttons above stand in for the doorbell */}
+          {!RT?.public && (
+            <>
           <h2>Ring Developer Playground</h2>
           <form
             className="ring"
@@ -298,6 +303,8 @@ function App() {
             </figure>
           )}
           <video ref={video} autoPlay muted playsInline className="live" />
+            </>
+          )}
         </section>
       </div>
     </div>

@@ -10,7 +10,8 @@
   "scripts": {
     "start": "tsx src/main.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "serve": "tsx src/serve.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",

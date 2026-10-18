@@ -4,7 +4,9 @@ import { connectMcp, resultText, type ElicitPrompt, type Mcp, type RpcLog } from
 import { mountCard } from "./host.ts";
 import { listenOnce, speak, speechSupported, stopSpeaking } from "./voice.ts";
 
-const STACK = (import.meta.env.VITE_STACK_URL as string | undefined) ?? "http://localhost:8787";
+// Hosted sandboxes inject window.__STOOP__ (the visitor's own stack under /s/<id>); local dev uses :8787
+const RT = (window as unknown as { __STOOP__?: { stack?: string; public?: boolean } }).__STOOP__;
+const STACK = RT?.stack ? new URL(RT.stack, location.origin).href.replace(/\/$/, "") : ((import.meta.env.VITE_STACK_URL as string | undefined) ?? "http://localhost:8787");
 const params = new URLSearchParams(location.search);
 const ROLE = (params.get("role") === "buyer" ? "buyer" : "seller") as "seller" | "buyer";
 const BUYER_INDEX = Number(params.get("buyer") ?? 0);
@@ -296,6 +298,11 @@ export function App() {
     }, 2500);
     return () => clearInterval(poll);
   }, [mcp, task?.id, task?.status]);
+
+  // The hosted guided tour (same-origin parent page) drives this device through the same path as typing
+  useEffect(() => {
+    (window as unknown as { stoop?: unknown }).stoop = { ready: !!mcp, say: (t: string) => turn(t), demoPhotos: () => demoPhotos() };
+  });
 
   return (
     <div className="page">

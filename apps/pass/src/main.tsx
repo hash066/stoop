@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-const STACK = (import.meta.env.VITE_STACK_URL as string | undefined) ?? "http://localhost:8787";
+// Hosted sandboxes inject window.__STOOP__ (the visitor's own stack under /s/<id>); local dev uses :8787
+const RT = (window as unknown as { __STOOP__?: { stack?: string; public?: boolean } }).__STOOP__;
+const STACK = RT?.stack ? new URL(RT.stack, location.origin).href.replace(/\/$/, "") : ((import.meta.env.VITE_STACK_URL as string | undefined) ?? "http://localhost:8787");
 const passId = location.pathname.match(/\/p\/([A-Za-z0-9_]+)/)?.[1];
 
 function deviceId(): string {

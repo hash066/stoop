@@ -69,7 +69,7 @@ describe("MCP Tasks: watch_handoff", () => {
     await stack.settlement.buyerOutcome(passId, "sim-device-0001", "got_it");
     await waitFor(async () => (await getTask(seller.client, taskId)).status === "completed", 3000, "task completed", stack);
     const final = await seller.client.request({ method: "tasks/result", params: { taskId } }, CallToolResultSchema);
-    expect(text(final)).toMatch(/Sold and paid/);
+    expect(text(final)).toMatch(/Sold\. \$\d+\.\d{2} is on its way to you/);
     expect(final._meta).toMatchObject({ ui: { resourceUri: expect.stringMatching(/^ui:\/\/stoop\/handoff-timeline@/) } });
     expect((await seller.client.request({ method: "tasks/list", params: {} }, ListTasksResultSchema)).tasks.map((t) => t.taskId)).toContain(taskId);
   });

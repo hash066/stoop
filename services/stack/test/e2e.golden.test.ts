@@ -98,7 +98,7 @@ describe("golden path: sweep -> list -> haggle -> approve -> pay -> porch pickup
     expect((await stack.psp.get(d2.holdId!))?.status).toBe("captured");
 
     const status = log(await seller.call("handoff_status", { dealId }));
-    expect(text(status)).toMatch(/Sold and paid/);
+    expect(text(status)).toMatch(/Sold\. \$\d+\.\d{2} is on its way to you/);
     const receipt = log(await seller.call("get_receipt", { dealId }));
     expect(sc<{ verifyUrl: string }>(receipt).verifyUrl).toMatch(/\/verify\/rcpt_/);
 

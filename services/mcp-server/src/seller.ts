@@ -44,7 +44,6 @@ const STATE_SPEECH: Record<string, string> = {
   WINDOW_OPEN: "The pickup window is open. I'm watching the porch.",
   STILL_THERE: "The buyer checked in, but the item still looks like it's on the porch.",
   INSPECTION: "Pickup verified by your doorbell. The buyer has a short inspection window, then the money is released.",
-  CLOSED: "Sold and paid.",
   VOIDED: "That sale didn't happen, so the buyer's hold was released.",
   REVIEW: "I couldn't fully verify the pickup. If the buyer has it, say confirm pickup.",
   DEGRADED: "Your camera wasn't available, so I need you and the buyer to confirm the pickup.",
@@ -441,7 +440,11 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
       return statusResult(deal);
     },
   );
-  const stateSpeech = (deal: Deal) => STATE_SPEECH[deal.state] ?? `The sale is ${deal.state.toLowerCase().replace(/_/g, " ")}.`;
+  // Once the money is released, say how much is coming: the number a seller actually cares about
+  const stateSpeech = (deal: Deal) =>
+    ["CAPTURED", "PAYOUT_RECORDED", "CLOSED"].includes(deal.state)
+      ? `Sold. ${$(deal.amountMinor - deal.sellerFeeMinor)} is on its way to you.`
+      : (STATE_SPEECH[deal.state] ?? `The sale is ${deal.state.toLowerCase().replace(/_/g, " ")}.`);
   const statusResult = async (deal: Deal) => result(stateSpeech(deal), await timeline(ctx, deal), ctx.cards, "handoff-timeline");
   if (taskStore) registerWatchHandoff(server, ctx, { resolveDeal: latestDeal, speech: stateSpeech, snapshot: statusResult });
 

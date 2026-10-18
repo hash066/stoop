@@ -1,0 +1,99 @@
+// Hosted mode: isolation between visitors, limits, and feedback handling (no browser needed).
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { createSandboxServer } from "../src/sandboxes.ts";
+import { ROOT } from "./harness.ts";
+
+const ORIGIN = "http://stoop.test";
+let stopAll: Array<() => void> = [];
+afterEach(() => {
+  for (const s of stopAll) s();
+  stopAll = [];
+});
+
+async function server(over: Partial<Parameters<typeof createSandboxServer>[0]> = {}) {
+  const dataDir = mkdtempSync(join(tmpdir(), "stoop-sbx-"));
+  const s = await createSandboxServer({ rootDir: ROOT, origin: ORIGIN, dataDir, adminKey: "k", ...over });
+  stopAll.push(s.stop);
+  const call = (path: string, init: RequestInit & { ip?: string } = {}) =>
+    s.app.fetch(new Request(ORIGIN + path, { ...init, headers: { "Content-Type": "application/json", "X-Forwarded-For": init.ip ?? "1.1.1.1", Origin: ORIGIN, ...(init.headers ?? {}) } }));
+  const create = async (ip?: string) => (await (await call("/api/sandboxes", { method: "POST", ip })).json()) as { id: string; tour: string };
+  return { s, call, create, dataDir };
+}
+
+const SELLER = { Authorization: "Bearer seller-demo-okafor", Accept: "application/json, text/event-stream", "MCP-Protocol-Version": "2025-11-25" };
+const tool = (name: string) => ({
+  method: "POST",
+  headers: SELLER,
+  body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } }),
+});
+/** Spoken text of a stateless MCP tool result (JSON or SSE framing). */
+async function spoken(res: Response): Promise<string> {
+  const raw = await res.text();
+  const json = raw.startsWith("{") ? raw : (raw.split("\n").find((l) => l.startsWith("data:")) ?? "data:{}").slice(5);
+  const msg = JSON.parse(json) as { result?: { content?: Array<{ text?: string }> } };
+  return (msg.result?.content ?? []).map((c) => c.text ?? "").join(" ");
+}
+
+describe("hosted sandboxes", () => {
+  it("gives each visitor a private world: one visitor's sale never shows up in another's", async () => {
+    const { call, create } = await server();
+    const a = await create("1.1.1.1");
+    const b = await create("2.2.2.2");
+    expect(a.id).not.toBe(b.id);
+    expect(a.tour).toBe(`/s/${a.id}/`);
+    await call(`/s/${a.id}/sweep/demo`, { method: "POST", headers: { Authorization: "Bearer seller-demo-okafor" } });
+    expect(await spoken(await call(`/s/${a.id}/mcp/seller`, tool("appraise_photos")))).toMatch(/things you can sell/);
+    // A's garage is appraised; B, with the same demo tokens, sees an empty household
+    expect(await spoken(await call(`/s/${a.id}/mcp/seller`, tool("my_items")))).toMatch(/You have 4 things/);
+    expect(await spoken(await call(`/s/${b.id}/mcp/seller`, tool("my_items")))).toMatch(/Nothing appraised yet/);
+    const cfgA = (await (await call(`/s/${a.id}/api/config`)).json()) as { publicBaseUrl: string; passBaseUrl: string };
+    expect(cfgA.publicBaseUrl).toBe(`${ORIGIN}/s/${a.id}`);
+    expect(cfgA.passBaseUrl).toBe(`${ORIGIN}/s/${a.id}/m`);
+  });
+
+  it("answers an expired or unknown sandbox with a friendly page (and JSON for API calls)", async () => {
+    const { call } = await server();
+    const page = await call("/s/nope/");
+    expect(page.status).toBe(404);
+    expect(await page.text()).toMatch(/expired/);
+    const api = await call("/s/nope/mcp/seller", { method: "POST", body: "{}" });
+    expect(await api.json()).toEqual({ error: "sandbox_expired" });
+  });
+
+  it("limits sandboxes per IP and in total", async () => {
+    const { call } = await server({ createsPerIpPerHour: 2, maxWorlds: 3 });
+    const post = (ip: string) => call("/api/sandboxes", { method: "POST", ip });
+    expect((await post("9.9.9.9")).status).toBe(200);
+    expect((await post("9.9.9.9")).status).toBe(200);
+    expect((await post("9.9.9.9")).status).toBe(429);
+    expect((await post("8.8.8.8")).status).toBe(200);
+    // full, and every world was used in the last 5 minutes: refuse rather than kick someone out
+    expect((await post("7.7.7.7")).status).toBe(503);
+  });
+
+  it("stores feedback, keeps an email only with consent, and exports only with the admin key", async () => {
+    const { call, dataDir } = await server();
+    const send = (body: unknown) => call("/api/feedback", { method: "POST", body: JSON.stringify(body) });
+    expect((await send({ rating: 9, wouldUse: "yes" })).status).toBe(400);
+    expect((await send({ rating: 4, wouldUse: "maybe", email: "a@example.com" })).status).toBe(200);
+    expect((await send({ rating: 5, wouldUse: "yes", email: "b@example.com", consent: true, comment: "love it" })).status).toBe(200);
+    const rows = readFileSync(join(dataDir, "feedback.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    expect(rows[0].email).toBeUndefined();
+    expect(rows[1].email).toBe("b@example.com");
+    expect((await call("/api/feedback.jsonl?key=wrong")).status).toBe(403);
+    expect(await (await call("/api/feedback.jsonl?key=k")).text()).toContain("love it");
+  });
+
+  it("retires worlds idle past the limit", async () => {
+    let t = 1_000_000;
+    const { s, create } = await server({ now: () => t, idleMs: 60_000 });
+    const a = await create();
+    expect(s.worlds.has(a.id)).toBe(true);
+    t += 61_000;
+    s.sweep();
+    expect(s.worlds.has(a.id)).toBe(false);
+  });
+});
