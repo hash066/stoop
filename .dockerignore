@@ -1,0 +1,12 @@
+.git
+**/node_modules
+**/dist
+apps/firetv
+infra/cdk.out
+infra/outputs.json
+tools/record-demo/clips
+tools/record-demo/qa-shots
+.data
+.env
+.env.*
+*.log
