@@ -145,7 +145,7 @@ See [`apps/firetv/README.md`](apps/firetv/README.md) for details and the Android
 - [`docs/PRODUCT_FEEDBACK.md`](docs/PRODUCT_FEEDBACK.md) · [`docs/FRICTION_LOG.md`](docs/FRICTION_LOG.md)
 - [`docs/RING_CERT_NOTES.md`](docs/RING_CERT_NOTES.md) · [`docs/AI_DISCLOSURE.md`](docs/AI_DISCLOSURE.md) · [`docs/PLAN.md`](docs/PLAN.md)
 - Open source:
-  - [`packages/proof-of-handoff`](packages/proof-of-handoff): verify any receipt with `poh verify`
+  - [`packages/proof-of-handoff`](packages/proof-of-handoff), published on npm as [`proof-of-handoff`](https://www.npmjs.com/package/proof-of-handoff): verify any receipt with `npx proof-of-handoff verify receipt.jws --jwks jwks.json`
   - [`oss/ring-api-helloworld`](oss/ring-api-helloworld): a media-helpers contribution to Amazon's Ring starter, open upstream as [AmazonAppDev/ring-api-helloworld#36](https://github.com/AmazonAppDev/ring-api-helloworld/pull/36) (issue [#35](https://github.com/AmazonAppDev/ring-api-helloworld/issues/35))
 
 ## Repo layout

@@ -5,6 +5,7 @@
 > - [ ] TODO(team): the one real human story (Marketplace no-show or stranger at the door). If there isn't one, use a clearly labelled persona. Never invent a user.
 > - [ ] TODO: YouTube link (≤ 3:00, public, English captions)
 > - [x] Tester site (the web app, Amazon Bedrock): https://d29kyjvj1jibpu.cloudfront.net. Judge site (the same plus the Alexa+ device tour at /demo): https://d2h8mmod981k0j.cloudfront.net
+> - [x] `proof-of-handoff` 0.1.0 on npm: https://www.npmjs.com/package/proof-of-handoff
 > - [x] Alexa skill "stoop shop" deployed (development stage) and checked through Amazon's Alexa simulator against the live site; judges need beta-test invites to use it on their own Echo
 > - [ ] TODO: links for the two market figures below (OfferUp report; MPB survey), or drop them
 > - [ ] TODO: real porch footage; a real Ring snapshot needs a physical Ring device (the Playground's virtual device has no recordings)
@@ -28,7 +29,7 @@ AI agents already sell for people. In late September 2026 a Big Tech shopping ag
 - **Agents haggle, people approve.** Stoop negotiates with buyers, including buyers' own AI assistants, over MCP. It never knows the floor (it only asks an oracle "acceptable? counter?") and never sees the address. Every sale needs the owner's approval, bound to the exact terms they saw.
 - **Pay, but held.** The buyer checks out through an Alexa+-style UCP checkout; the money is held, not charged.
 - **Proof of handoff.** The buyer's phone gets a pickup pass that shows the address only inside the paid pickup window. Pass check-in + a Ring doorbell event + before/after porch frames go through an explicit truth table. Only VERIFIED releases the money, after a short inspection window.
-- **A receipt anyone can verify.** Each outcome is a signed JWS (ES256 over RFC 8785 canonical JSON): `npx proof-of-handoff verify`.
+- **A receipt anyone can verify.** Each outcome is a signed JWS (ES256 over RFC 8785 canonical JSON): `npx proof-of-handoff verify` ([on npm](https://www.npmjs.com/package/proof-of-handoff)).
 - **No Ring? Use an old phone.** The web app turns any phone or laptop into the porch camera: it sends the before and after photos, and during a pickup its motion detector asks Bedrock vision whether someone is at the door (counted, never identified).
 - **Stoop Street.** Every shop in one marketplace, nearest first, with reviews that can only come from a finished pickup and link to its signed receipt. Buyers can send an agent ("a jogging stroller under $100 near 62704") that haggles with sellers' agents inside the budget; it can agree a price, only the buyer can pay.
 - **On a real Alexa today.** A custom skill ("Alexa, ask stoop shop if I have any offers" / "find a stroller under a hundred dollars") runs the same tools: the seller approves the exact terms by voice, the buyer pays with their purchase code over $100.
@@ -81,7 +82,7 @@ From `docs/FRICTION_LOG.md` (23 entries), for example:
 
 - The agent provably can't leak the address: it never has it, and in AWS no IAM principal but one Lambda can decrypt it.
 - A full sale works by voice in three seller sentences, and every simulated piece is labelled.
-- Two open-source contributions: `proof-of-handoff` (receipt schema, verifier, CLI) and media helpers for Amazon's Ring starter ([AmazonAppDev/ring-api-helloworld#36](https://github.com/AmazonAppDev/ring-api-helloworld/pull/36)).
+- Two open-source contributions: [`proof-of-handoff`](https://www.npmjs.com/package/proof-of-handoff) on npm (receipt schema, verifier, CLI) and media helpers for Amazon's Ring starter ([AmazonAppDev/ring-api-helloworld#36](https://github.com/AmazonAppDev/ring-api-helloworld/pull/36)).
 
 ## What's next
 

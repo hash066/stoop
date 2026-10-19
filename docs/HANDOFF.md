@@ -143,7 +143,7 @@
 | **Web app** (Oct 19) | `apps/web`, `services/stack/src/{web,porchcam,sandboxes}.ts`, `services/stack/e2e/real-flow.ts` | Live on both sites. Server tests: `e2e.real.test.ts`, `sandboxes.test.ts` |
 | AWS host stack | `infra/lib/host-stack.ts` (`StoopHostStack`) | **Deployed Oct 19.** Tester site https://d29kyjvj1jibpu.cloudfront.net (Bedrock, 1500 calls/day, 80 shops), judge site https://d2h8mmod981k0j.cloudfront.net (Bedrock, 1000 calls/day, 40 shops, `/demo` linked). Instance i-0aa13f2eaf63c246d; update with SSM (`docs/DEPLOY.md`). $30 budget `stoop-cap-30usd` with stop-instance + deny-Bedrock actions armed |
 | OSS: Ring starter media helpers | `oss/ring-api-helloworld` | **PR open:** AmazonAppDev/ring-api-helloworld#36 (issue #35) |
-| OSS: `proof-of-handoff` (renamed from `@stoop/…`) | `packages/proof-of-handoff` | Tarball made with `pnpm pack` and smoke-tested in a clean folder (`poh verify`: VALID on a signed receipt, `bad_signature` on a forged one); **the user publishes** it from their own terminal (2FA code) |
+| OSS: `proof-of-handoff` (renamed from `@stoop/…`) | `packages/proof-of-handoff` | **Published Oct 19: 0.1.0 on npm** (https://www.npmjs.com/package/proof-of-handoff), the `pnpm pack` tarball (same shasum). Installed from the registry in a clean folder: `npx proof-of-handoff verify` gives VALID on a signed receipt and `bad_signature` on a forged one; types compile under strict NodeNext |
 | Fire TV Garage Mode | `apps/firetv` | Web target works; Android TV emulator deferred (user decides later) |
 | AgentCore Runtime / Memory | – | Not done: agents run in the host containers. Optional if time allows |
 
@@ -160,7 +160,7 @@
 - **Photos for the landing page** (taste rules want real imagery): 4 of the user's own photos (an item on a porch or stoop, a close-up of an item, someone picking something up, an old phone propped at a window).
 - ~~AWS activation~~ **Done Oct 19**: both stacks deployed and verified (see §5).
 - **Hosting in us-east-1** (EC2 + CloudFront, or AgentCore for the agents) once EC2 activates. Then the Negotiator on AgentCore Runtime with tools calling Settlement over HTTP, AgentCore Observability screenshots, and a judge URL in the README.
-- **npm:** the user is logged in (`hashherrr`, 2FA on). Publish only with pnpm or a pnpm-made tarball: `publishConfig` swaps `bin`/`exports` to `dist/` and plain `npm publish` ignores it (a `prepublishOnly` guard refuses it; friction #23). The user runs, in their own terminal, `pnpm pack` in the package, then `npm publish proof-of-handoff-<v>.tgz --access public` and types the authenticator code when asked. Afterwards add the npm link to README and SUBMISSION.
+- ~~npm~~ **Done Oct 19** (0.1.0 live). For a later version: the user is logged in (`hashherrr`, 2FA on). Bump the version, then publish only with pnpm or a pnpm-made tarball: `publishConfig` swaps `bin`/`exports` to `dist/` and plain `npm publish` ignores it (a `prepublishOnly` guard refuses it; friction #23). The user runs, in their own terminal, `pnpm pack` in the package, then `npm publish proof-of-handoff-<v>.tgz --access public` and types the authenticator code when asked. Afterwards add the npm link to README and SUBMISSION.
 - **Ring:** the user gets a Playground token (30-minute lifetime). Procedure: restart the stack with `FRAME_SOURCE=ring`; the user pastes the token in Ops (localhost:5183) → Connect → **Snapshot** (real 303 flow) → **Use for pickups** → **Live view** (WHEP). Log what breaks in the friction log.
 - **Assets:** porch footage (~15 before/after pairs + 3 handoff clips → `fixtures/footage/`), real item photos, the real story (or approval of a labelled persona), a narrator.
 - **Fire TV emulator** (1.5 GB on C:): the user decides "depending on the updates".
@@ -186,7 +186,7 @@ pnpm qa                                   # browser QA of every surface (needs p
 ## 8. Open questions for the user
 
 1. AWS: can you see why activation is pending (billing or verification step in the console)? Otherwise, open an AWS Support case.
-2. npm: publish the pnpm-made tarball from your own terminal (see §6) and type the authenticator code there.
+2. ~~npm~~ Done: `proof-of-handoff` 0.1.0 is on npm.
 3. Ring: when you have a Playground token, say so; the run takes about 10 minutes of the token's 30.
 4. When will the footage, photos, story and narrator arrive?
 5. Fire TV emulator: yes or no (deferred by the user on Oct 17).
