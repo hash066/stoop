@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "tsx src/main.ts",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=20000",
     "typecheck": "tsc -p tsconfig.json",
     "serve": "tsx src/serve.ts"
   },

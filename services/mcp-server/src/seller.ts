@@ -91,6 +91,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
             blockedReason: z.string().optional(),
             alternative: z.string().optional(),
             photoUrl: z.string().optional(),
+            priceSource: z.enum(["comps", "ai-estimate", "none"]),
           }),
         ),
         unidentified: z.array(z.string()),
@@ -133,6 +134,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
           blockedReason: a.recall.reason,
           alternative: a.recall.alternative,
           photoUrl: photo?.url,
+          priceSource: a.priceSource,
         });
       }
       const sellable = out.filter((i) => !i.blocked);

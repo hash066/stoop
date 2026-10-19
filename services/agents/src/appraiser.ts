@@ -43,7 +43,61 @@ export interface AppraisedItem {
   comps: Comp[];
   compsConfidence: "high" | "low";
   compsSource: string;
+  /** Where the price came from: market comparables, an AI estimate (labelled as such), or nothing. */
+  priceSource: "comps" | "ai-estimate" | "none";
   recall: RecallVerdict;
+}
+
+/** Fallback pricing for items with no comparables: an estimate, always shown to the seller as one. */
+export interface PriceEstimator {
+  readonly name: string;
+  estimate(id: Identification): Promise<{ lowMinor: number; highMinor: number } | undefined>;
+}
+
+const CONDITION_WORDS = { A: "like new", B: "light wear", C: "visible wear", D: "for parts" } as const;
+
+/** Bedrock estimate of a typical local secondhand price range (USD), bounded and sanity-checked. */
+export class BedrockPriceEstimator implements PriceEstimator {
+  readonly name: string;
+  private client: BedrockRuntimeClient;
+  constructor(
+    private modelId = modelIdFor("VISION"),
+    region = process.env.AWS_REGION ?? "us-east-1",
+  ) {
+    this.name = `ai-estimate:${modelId}`;
+    this.client = new BedrockRuntimeClient({ region });
+  }
+  async estimate(id: Identification) {
+    if (!takeModelCalls(1)) return undefined;
+    try {
+      const out = await this.client.send(
+        new ConverseCommand({
+          modelId: this.modelId,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  text:
+                    `Typical price this would sell for secondhand, local pickup in the US (Facebook Marketplace, Craigslist): "${id.title}" (${id.category}), condition: ${CONDITION_WORDS[id.condition]}. ` +
+                    'Reply ONLY JSON: {"low":<dollars>,"high":<dollars>}.',
+                },
+              ],
+            },
+          ],
+          inferenceConfig: { maxTokens: 60, temperature: 0 },
+        }),
+      );
+      const text = out.output?.message?.content?.map((c) => ("text" in c ? c.text : "")).join("") ?? "";
+      const j = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? "") as { low?: number; high?: number };
+      const low = Math.round(Number(j.low) * 100);
+      const high = Math.round(Number(j.high) * 100);
+      if (!(low >= 100 && high >= low && high <= 2_000_000)) return undefined;
+      return { lowMinor: low, highMinor: high };
+    } catch {
+      return undefined;
+    }
+  }
 }
 
 export interface Identifier {
@@ -156,7 +210,7 @@ export function priceBand(comps: Comp[], condition: Identification["condition"])
 
 export class Appraiser {
   constructor(
-    private deps: { identifier: Identifier; comps: CompsProvider; recalls: RecallChecker },
+    private deps: { identifier: Identifier; comps: CompsProvider; recalls: RecallChecker; estimator?: PriceEstimator },
   ) {}
 
   static offline(recalls: RecallChecker) {
@@ -164,7 +218,8 @@ export class Appraiser {
   }
 
   static forMode(recalls: RecallChecker, comps: CompsProvider = new CachedComps()) {
-    return new Appraiser({ identifier: llmMode() === "bedrock" ? new BedrockIdentifier() : new CatalogIdentifier(), comps, recalls });
+    const live = llmMode() === "bedrock";
+    return new Appraiser({ identifier: live ? new BedrockIdentifier() : new CatalogIdentifier(), comps, recalls, estimator: live ? new BedrockPriceEstimator() : undefined });
   }
 
   get identifierName() {
@@ -183,14 +238,27 @@ export class Appraiser {
       const comps = await this.deps.comps.find(id.title, id.category);
       const recall = await this.deps.recalls.check(id.title, id.category);
       const photoHash = createHash("sha256").update(p.bytes ?? p.name).digest("hex");
+      let band = comps.length ? priceBand(comps, id.condition) : undefined;
+      let priceSource: AppraisedItem["priceSource"] = band ? "comps" : "none";
+      let compsSource = this.deps.comps.name;
+      if (!band && this.deps.estimator) {
+        const est = await this.deps.estimator.estimate(id);
+        if (est) {
+          const list = roundTo5((est.lowMinor + est.highMinor) / 2);
+          band = { listMinor: list, quickSaleMinor: roundTo5(list * 0.8), floorSuggestionMinor: roundTo5(list * 0.7) };
+          priceSource = "ai-estimate";
+          compsSource = this.deps.estimator.name;
+        }
+      }
       items.push({
         photoName: p.name,
         photoHash,
         identification: id,
-        priceBand: comps.length ? priceBand(comps, id.condition) : { listMinor: 0, quickSaleMinor: 0, floorSuggestionMinor: 0 },
+        priceBand: band ?? { listMinor: 0, quickSaleMinor: 0, floorSuggestionMinor: 0 },
         comps: comps.slice(0, 5),
         compsConfidence: comps.length >= 3 ? "high" : "low",
-        compsSource: this.deps.comps.name,
+        compsSource,
+        priceSource,
         recall,
       });
     }

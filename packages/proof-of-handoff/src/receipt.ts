@@ -18,7 +18,7 @@ export const HandoffReceipt = z.object({
         kind: z.enum(["motion_detected", "button_press"]),
         subType: z.string().optional(),
         at: z.number().int(),
-        origin: z.enum(["ring", "simulator"]),
+        origin: z.enum(["ring", "simulator", "porchcam"]),
       }),
     ),
     beforeFrameSha256: z.string().regex(/^[0-9a-f]{64}$/).optional(),

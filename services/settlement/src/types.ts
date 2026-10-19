@@ -176,7 +176,7 @@ export interface FrameObservation {
   sha256: string;
   at: number;
   rationale?: string;
-  origin: "ring" | "our_footage" | "simulator";
+  origin: "ring" | "our_footage" | "simulator" | "porchcam";
 }
 
 export interface Evidence {

@@ -110,8 +110,8 @@ export const RingEvent = z.object({
   at: EpochMs,
   subType: RingSubType.optional(),
   componentIds: z.array(z.string()).optional(),
-  /** "ring" for real webhooks, "simulator" for our signed test events. Always shown in the UI. */
-  origin: z.enum(["ring", "simulator"]),
+  /** "ring" for real webhooks, "simulator" for our signed test events, "porchcam" for a phone or laptop camera at the door. Always shown in the UI. */
+  origin: z.enum(["ring", "simulator", "porchcam"]),
   requestId: z.string(),
 });
 export type RingEvent = z.infer<typeof RingEvent>;

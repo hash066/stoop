@@ -11,7 +11,7 @@ export interface Frame {
   bytes: Uint8Array;
   mime: string;
   at: number;
-  origin: "ring" | "our_footage" | "simulator";
+  origin: "ring" | "our_footage" | "simulator" | "porchcam";
   /** Ground truth for labelled footage (never trusted in production paths). */
   label?: ItemPresence;
   sourceName: string;

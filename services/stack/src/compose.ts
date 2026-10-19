@@ -27,8 +27,10 @@ import {
   type Scheduler,
 } from "@stoop/settlement";
 import { awsSettlementDeps, type AwsWiring } from "@stoop/settlement/aws";
-import { BedrockVision, LabelVision, Verifier } from "@stoop/verifier";
+import { BedrockVision, LabelVision, Verifier, type VisionAdapter } from "@stoop/verifier";
 import { LocalPhotoStore, LocalPreferenceMemory } from "./memory.ts";
+import { PorchCamSource } from "./porchcam.ts";
+import { webRouter } from "./web.ts";
 import { NotificationHub } from "./notifications.ts";
 import { verifyPageHtml, refundPolicyHtml } from "./pages.ts";
 import { SANDBOX_PROXY_HTML } from "./sandbox.ts";
@@ -49,11 +51,14 @@ export interface StackConfig {
   autoTick?: boolean;
   recallChecker?: RecallChecker;
   ringToken?: string;
-  frameSource?: "footage" | "ring";
+  /** Where pickup photos come from: labelled footage (demo), Ring snapshots, or a phone/laptop porch camera. */
+  frameSource?: "footage" | "ring" | "porchcam";
   /** Persist the receipt signing key under .data/ so receipts stay verifiable across restarts. */
   persistKeys?: boolean;
   /** Seed the demo household, buyers and photos. */
   seedDemo?: boolean;
+  /** Vision adapter override (tests). Default: Bedrock in LLM_MODE=bedrock, else footage labels. */
+  vision?: VisionAdapter;
   /** StoopStack outputs: run Settlement on DynamoDB, KMS, the Vault Lambda and Step Functions. */
   aws?: AwsWiring;
 }
@@ -105,8 +110,9 @@ export async function createStack(cfg: StackConfig) {
   const footage = new FootageSource(join(cfg.rootDir, "fixtures", "footage"), loadFootageIndex(join(cfg.rootDir, "fixtures", "footage")));
   let ringToken = cfg.ringToken ?? process.env.RING_ACCESS_TOKEN ?? "";
   const ringClient = new RingClient({ getToken: async () => ringToken });
-  const frames: FrameSource = cfg.frameSource === "ring" ? new RingSnapshotSource(ringClient) : footage;
-  const vision = llmMode() === "bedrock" ? new BedrockVision(process.env.BEDROCK_MODEL_ID_VISION ?? "us.amazon.nova-2-lite-v1:0", process.env.AWS_REGION ?? "us-east-1") : new LabelVision();
+  const porchcam = new PorchCamSource({ now: () => clock.now() });
+  const frames: FrameSource = cfg.frameSource === "ring" ? new RingSnapshotSource(ringClient) : cfg.frameSource === "porchcam" ? porchcam : footage;
+  const vision = cfg.vision ?? (llmMode() === "bedrock" ? new BedrockVision(process.env.BEDROCK_MODEL_ID_VISION ?? "us.amazon.nova-2-lite-v1:0", process.env.AWS_REGION ?? "us-east-1") : new LabelVision());
   const lastFrames = new Map<string, { kind: string; sha256: string; presence: string; adapter: string; origin: string; mime: string; bytes: Uint8Array; at: number }>();
   const scale = cfg.frameDelayScale ?? 1;
   const verifier = new Verifier({
@@ -535,6 +541,9 @@ export async function createStack(cfg: StackConfig) {
   });
   app.route("/sim", sim);
 
+  // The web product: real sellers and buyers, pickup pass claims, the porch camera
+  app.route("/web", webRouter({ settlement, sellers, buyers, otps, porchcam, vision, bus, now: () => clock.now() }));
+
   app.get("/api/config", (c) =>
     c.json({
       demo: true,
@@ -577,6 +586,7 @@ export async function createStack(cfg: StackConfig) {
     buyers,
     simulatorKey,
     ringHmacKey,
+    porchcam,
     tick: () => runDue(clock.now()),
     stop: () => {
       if (timer) clearInterval(timer);

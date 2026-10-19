@@ -9,7 +9,7 @@ export interface EvidenceSink {
   recordFrame(
     dealId: string,
     kind: "before" | "after",
-    obs: { presence: ItemPresence; sha256: string; at: number; rationale?: string; origin: "ring" | "our_footage" | "simulator" },
+    obs: { presence: ItemPresence; sha256: string; at: number; rationale?: string; origin: "ring" | "our_footage" | "simulator" | "porchcam" },
   ): Promise<unknown>;
   setCameraStatus(dealId: string, camera: "ok" | "offline" | "e2ee" | "unavailable"): Promise<unknown>;
   dealInfo(dealId: string): Promise<{ itemTitle: string; placement?: string; deviceId?: string; state: string }>;
