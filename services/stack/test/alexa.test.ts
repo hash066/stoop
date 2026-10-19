@@ -115,13 +115,13 @@ describe("the Stoop skill on Alexa", () => {
     expect((await say(post, intent("LinkShopIntent", { code }))).speech).toMatch(/set up to shop, Ben/);
 
     const found = await say(post, intent("FindIntent", { query: "a jogging stroller under a hundred and fifty dollars" }));
-    expect(found.speech).toMatch(/I found one: the BOB Revolution jogging stroller for \$120, porch pickup in <say-as interpret-as="digits">62704<\/say-as>, from Ana's porch/);
+    expect(found.speech).toMatch(/I found one: the three-wheel jogging stroller for \$120, porch pickup in <say-as interpret-as="digits">62704<\/say-as>, from Ana's porch/);
     const offered = await say(post, intent("OfferIntent", { price: "110" }), found.attrs);
     expect(offered.speech).toMatch(/\$110 could work/);
     await tool(post, shop.id, "seller", seller, "respond_to_offer", { decision: "accept" });
 
     const terms = await say(post, intent("BuyIntent"), offered.attrs);
-    expect(terms.speech).toMatch(/Pay \$1\d\d\.\d\d for the BOB Revolution jogging stroller\?.*purchase code/);
+    expect(terms.speech).toMatch(/Pay \$1\d\d\.\d\d for the three-wheel jogging stroller\?.*purchase code/);
     const ask = await say(post, intent("AMAZON.YesIntent"), terms.attrs);
     expect(ask.speech).toMatch(/four digit purchase code/);
     const paid = await say(post, intent("LinkShopIntent", { code: "2580" }), ask.attrs);

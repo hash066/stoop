@@ -27,7 +27,7 @@
 - Run `pnpm --filter @stoop/stack e2e` locally; it must print `PASS: real flow end to end`.
 - Do one real run yourself on the live site with two phones.
 - Check `/healthz` shows room (`"shops"` well under `"maxShops"`, `"modelCalls"` well under the daily cap).
-- Don't redeploy while testers have open shops: shops live in memory and a new container closes them.
+- Redeploys are safe for open shops: they're saved on the instance's disk and come back after the restart (expect about 20 s of errors while the containers start).
 
 ## After
 - `node tools/feedback-summary.mjs "<link>/api/feedback.jsonl?key=<admin key>"`

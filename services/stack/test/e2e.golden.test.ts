@@ -11,6 +11,9 @@ describe("golden path: sweep -> list -> haggle -> approve -> pay -> porch pickup
     const transcript: string[] = [];
     const seller = await mcpClient(stack, "seller", SELLER);
     const buyer = await mcpClient(stack, "buyer", DANA.token);
+    // the initialize result tells any host how to talk (voice first, no ids) and where the limits are
+    expect(seller.client.getInstructions()).toMatch(/never read ids, JSON or URLs.*owner's yes/s);
+    expect(buyer.client.getInstructions()).toMatch(/held, not charged.*pickup pass/s);
     const log = (r: Parameters<typeof text>[0]) => {
       transcript.push(JSON.stringify(r));
       return r;
@@ -27,10 +30,10 @@ describe("golden path: sweep -> list -> haggle -> approve -> pay -> porch pickup
 
     // 2. "Sell the stroller and the bike. Don't go below $90 on the stroller."
     const listed = log(await seller.call("list_items", { items: ["stroller", "bike"] }));
-    expect(seller.elicitations.at(-1)?.message).toMatch(/List the BOB Revolution jogging stroller at \$120/);
+    expect(seller.elicitations.at(-1)?.message).toMatch(/List the three-wheel jogging stroller at \$120/);
     expect(sc<{ listings: unknown[] }>(listed).listings).toHaveLength(2);
     log(await seller.call("set_mandate", { item: "stroller", floorDollars: 90 }));
-    expect(seller.elicitations.at(-1)?.message).toMatch(/Never sell the bob revolution jogging stroller below \$90/i);
+    expect(seller.elicitations.at(-1)?.message).toMatch(/Never sell the three-wheel jogging stroller below \$90/i);
 
     // 3. Buyer's assistant finds it and haggles
     const found = log(await buyer.call("search_listings", { query: "jogging stroller", maxPriceDollars: 100 }));
@@ -47,7 +50,7 @@ describe("golden path: sweep -> list -> haggle -> approve -> pay -> porch pickup
     // 4. Seller approves (state across sessions: pickup prefs remembered)
     log(await seller.call("set_pickup_preferences", { preset: "evenings" }));
     const offers = log(await seller.call("review_offers"));
-    expect(text(offers)).toMatch(/offers \$95 for the bob revolution jogging stroller, pickup 6 pm to 8 pm like last time/i);
+    expect(text(offers)).toMatch(/offers \$95 for the three-wheel jogging stroller, pickup 6 pm to 8 pm like last time/i);
     const accepted = log(await seller.call("respond_to_offer", { decision: "accept" }));
     expect(seller.elicitations.at(-1)?.message).toMatch(/You get \$90\.25 after Stoop's 5% fee/);
     const dealId = sc<{ dealId: string }>(accepted).dealId;

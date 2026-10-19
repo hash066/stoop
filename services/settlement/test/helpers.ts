@@ -50,7 +50,7 @@ export async function liveListing(st: Stack, opts: { askMinor?: number; floorMin
   const { s, hh } = st;
   const item = await s.createItem({
     householdId: hh.id,
-    title: opts.title ?? "BOB Revolution jogging stroller",
+    title: opts.title ?? "Three-wheel jogging stroller",
     category: "stroller",
     condition: "B",
     photoHashes: ["a".repeat(64)],

@@ -51,10 +51,16 @@ const STATE_SPEECH: Record<string, string> = {
   NO_SHOW: "The buyer didn't show up, so their hold was released and your item is listed again.",
 };
 
+/** Sent in the initialize result: what any host (Alexa+, an MCP client) needs before planning. */
+export const SELLER_INSTRUCTIONS =
+  "Stoop sells a household's things with contactless porch pickup. Voice first: read tool results as they are, in one or two sentences; never read ids, JSON or URLs; offer at most five options. " +
+  "Flow: appraise_photos after the person shares photos; list_items (the owner approves each listing); set_mandate for a private minimum the buyer never hears; review_offers and respond_to_offer; handoff_status and get_receipt. " +
+  "Every sale, minimum and cancellation needs the owner's yes. Money is held until the porch camera verifies the pickup, and the address is never available through these tools.";
+
 export function createSellerServer(ctx: StoopContext, actor: SellerActor, pending: PendingActions, taskStore?: TaskStore): McpServer {
   const server = new McpServer(
     { name: "stoop-seller", version: "0.1.0", title: "Stoop for sellers" },
-    { capabilities: { logging: {}, ...(taskStore ? { tasks: TASKS_CAPABILITY } : {}) }, taskStore },
+    { capabilities: { logging: {}, ...(taskStore ? { tasks: TASKS_CAPABILITY } : {}) }, taskStore, instructions: SELLER_INSTRUCTIONS },
   );
   const s = ctx.settlement;
   const who = `seller:${actor.householdId}`;
@@ -226,7 +232,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
       }
       if (!drafts.length) return result("Those are already for sale.", { kind: "listings", listings: [] }, ctx.cards, "listing-card");
       const approvals = await Promise.all(drafts.map((d) => s.requestApproval(s.publishTerms(d), who, `Publish ${d.title} at ${$(d.askMinor)}`)));
-      const summary = `List ${drafts.map((d) => `the ${d.title} at ${$(d.askMinor)}`).join(" and ")}? Pickup is contactless from your porch, verified by your porch camera.`;
+      const summary = `List ${drafts.map((d) => `the ${inSentence(d.title)} at ${$(d.askMinor)}`).join(" and ")}? Pickup is contactless from your porch, verified by your porch camera.`;
       const cardData = { kind: "listings", listings: drafts.map((d) => ({ listingId: d.id, title: d.title, askMinor: d.askMinor, photoUrl: d.photoUrls[0], state: "AWAITING_SELLER_OK" })) };
       return withApproval({
         server,

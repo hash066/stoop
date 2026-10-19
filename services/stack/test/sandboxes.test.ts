@@ -110,6 +110,18 @@ describe("hosted sandboxes", () => {
     expect(await (await call(`/s/${shop.id}/web/storefront`)).json()).toMatchObject({ displayName: "Ana", zip: "62704", listings: [] });
   });
 
+  it("lets only the admin list shops and close a test shop for good", async () => {
+    const { call } = await server();
+    const shop = (await (await call("/api/shops", { method: "POST", body: JSON.stringify(SHOP) })).json()) as { id: string };
+    expect((await call("/api/admin/shops")).status).toBe(403);
+    expect((await call("/api/admin/shops?key=wrong")).status).toBe(403);
+    expect(await (await call("/api/admin/shops?key=k")).json()).toMatchObject({ shops: [{ id: shop.id, names: ["Ana"], live: [] }] });
+    expect((await call(`/api/admin/shops/${shop.id}?key=wrong`, { method: "DELETE" })).status).toBe(403);
+    expect((await call(`/api/admin/shops/${shop.id}?key=k`, { method: "DELETE" })).status).toBe(200);
+    expect(await (await call("/api/admin/shops?key=k")).json()).toEqual({ shops: [] });
+    expect((await call(`/s/${shop.id}/web/storefront`)).status).not.toBe(200);
+  });
+
   it("keeps shops for days, demos for minutes, and counts only shops actually opened per address", async () => {
     let t = 5_000_000;
     const { s, call } = await server({ now: () => t, idleMs: 60_000, shopIdleMs: 3 * 60_000, shopsPerIpPerHour: 2 });

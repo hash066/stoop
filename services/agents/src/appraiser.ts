@@ -141,7 +141,8 @@ export class BedrockIdentifier implements Identifier {
                 { image: { format, source: { bytes: photo.bytes } } },
                 {
                   text:
-                    'Identify the single main household item for a resale listing. Reply ONLY JSON: {"title":"<brand model type>","category":"<one word>","condition":"A|B|C|D","confidence":"high|low"}. ' +
+                    'Identify the single main household item for a resale listing. Reply ONLY JSON: {"title":"<short description>","category":"<one word>","condition":"A|B|C|D","confidence":"high|low"}. ' +
+                    "The title describes what is visible (type, color, size), like \"Green three-wheel jogging stroller\". Name a brand or model only if its name is legible in the photo; never guess one. " +
                     "Condition: A like new, B light wear, C visible wear, D for parts. Ignore people and do not describe them." +
                     (photo.hint ? ` Seller's hint: ${photo.hint}` : ""),
                 },

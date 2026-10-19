@@ -10,6 +10,7 @@
 //   /s/<id>/*                  that world's API (MCP, UCP, pass, web), proxied to its stack
 //   /app/<name>/*              built app assets (shared by all worlds)
 //   POST /api/feedback         tester feedback -> <dataDir>/feedback.jsonl
+//   GET /api/admin/shops, DELETE /api/admin/shops/:id   (?key=ADMIN_KEY) list shops, close a test shop
 //   POST /alexa                the Stoop Alexa skill's endpoint (Alexa Skills Kit; signed requests only)
 //   POST /api/alexa/pair       a 6-digit code that links a shop to someone's Alexa
 import { generateKeyPairSync, randomBytes } from "node:crypto";
@@ -439,6 +440,28 @@ export async function createSandboxServer(o: SandboxServerOptions) {
   app.get("/api/feedback.jsonl", (c) => {
     if (!o.adminKey || c.req.query("key") !== o.adminKey) return c.json({ error: "forbidden" }, 403);
     return c.body(existsSync(feedbackFile) ? readFileSync(feedbackFile, "utf8") : "", 200, { "Content-Type": "application/x-ndjson" });
+  });
+
+  // ---------- admin (ADMIN_KEY): see the shops, close a test shop for good (it leaves Stoop Street)
+  const isAdmin = (c: Context) => !!o.adminKey && c.req.query("key") === o.adminKey;
+  app.get("/api/admin/shops", async (c) => {
+    if (!isAdmin(c)) return c.json({ error: "forbidden" }, 403);
+    const shops = [];
+    for (const w of worlds.values()) {
+      if (w.kind !== "shop") continue;
+      const households = [...new Set([...w.stack.sellers.values()].map((s) => s.householdId))];
+      const names = await Promise.all(households.map(async (h) => (await w.stack.settlement.householdPublic(h)).displayName));
+      const live = (await Promise.all(households.map((h) => w.stack.settlement.listingsForHousehold(h)))).flat().filter((l) => l.state === "LIVE");
+      shops.push({ id: w.id, names, live: live.map((l) => l.title), createdAt: new Date(w.createdAt).toISOString(), lastSeen: new Date(w.lastSeen).toISOString() });
+    }
+    return c.json({ shops });
+  });
+  app.delete("/api/admin/shops/:id", (c) => {
+    if (!isAdmin(c)) return c.json({ error: "forbidden" }, 403);
+    const w = worlds.get(c.req.param("id"));
+    if (!w || w.kind !== "shop") return c.json({ error: "not_found" }, 404);
+    stopWorld(w, true);
+    return c.json({ ok: true, closed: w.id });
   });
 
   // Shared, immutable app assets

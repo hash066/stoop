@@ -6,6 +6,7 @@
 import { Agent, tool } from "@strands-agents/sdk";
 import { z } from "zod";
 import { AI_DISCLOSURE, scanBuyerText, STRIKE_SIGNALS, type ScamSignal } from "@stoop/policy";
+import { inSentence } from "@stoop/shared";
 import { createModel, type Script } from "./llm.ts";
 
 export interface NegotiationPort {
@@ -279,7 +280,7 @@ function templateReply(
   if (s.acceptOutcome === "awaiting_seller") return `${dollars(s.buyerOfferMinor!)} could work. I'm checking with the owner now and will confirm shortly.`;
   if (s.oracle?.counterMinor) return `Thanks for the offer of ${dollars(s.buyerOfferMinor!)}. The best I can do is ${dollars(s.oracle.counterMinor)}. It's in good shape and pickup is contactless from the porch.`;
   if (s.buyerOfferMinor !== undefined) return `I can't go that low, sorry. The asking price is ${dollars(listing.askMinor)}.`;
-  return `I only know what the listing says: it's the ${listing.title}, asking ${dollars(listing.askMinor)}. Pickup is contactless from the porch, and your payment is held until the pickup is verified. Want to make an offer?`;
+  return `I only know what the listing says: it's the ${inSentence(listing.title)}, asking ${dollars(listing.askMinor)}. Pickup is contactless from the porch, and your payment is held until the pickup is verified. Want to make an offer?`;
 }
 
 /** Offline policy for ScriptedModel: same tool sequence a well-behaved LLM should follow. */

@@ -193,7 +193,7 @@ export function Landing() {
             <div className="card mint stack-s small" aria-hidden="true">
               {[
                 ["12:02", "Looking for a jogging stroller up to $100 near 62704."],
-                ["12:03", "Found a BOB jogging stroller for $120 at Ana’s porch. Talking to the seller’s assistant."],
+                ["12:03", "Found a jogging stroller for $120 at Ana’s porch. Talking to the seller’s assistant."],
                 ["12:03", "They countered at $105. That’s over your limit, so I offered $100."],
                 ["12:05", "The owner said yes: $100. Tap Pay to buy it."],
               ].map(([t, s]) => (

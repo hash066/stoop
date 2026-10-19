@@ -113,6 +113,9 @@
 
 ## 5. Current state (verified Oct 19; newest first)
 
+- **Judge audit (Oct 19, late):** fresh clone installs in 37 s and passes typecheck and all tests; the live e2e ends CLOSED; Amazon's Alexa simulator runs the seller conversation on the live site; the official MCP Inspector connects to the live server (protocol 2025-11-25, sessions, tasks, 6 `ui://` cards). Fixed from it: the judge-site device tour failed at step 3 (Nova answered "$95?" with a question; friction #24); `pnpm tour` now opens `/demo`; Bedrock was asked for "brand model" titles and invented one, and the offline catalog used real brands, so titles are generic now (no third-party trademarks in the demo or video); both MCP servers send `instructions`; README claims match the live product. Known and by design: the browser console shows a 405 for the MCP SDK's optional GET stream and a 403 when a pass is opened on a phone it isn't bound to yet.
+- **Admin:** `GET /api/admin/shops?key=…` lists shops (names, live listings); `DELETE /api/admin/shops/<id>?key=…` closes a test shop for good so it leaves Stoop Street. The key is in Secrets Manager (`docs/DEPLOY.md`).
+- **Real testers: none yet** (both sites' feedback holds only automated tour checks). This is the biggest gap for Potential Impact.
 - **Stoop Street** (`/street`, `/me`): every shop in one market, receipt-bound reviews, buyer agents that haggle within a budget (`services/stack/src/street.ts`), Post Everywhere, link previews.
 - **Shops persist** under `/opt/stoop-data-<site>/worlds` and come back after a redeploy (checked on the live site). Deploys stop containers gracefully; expect about 20 s of 504s while they start.
 - **Alexa skill** "stoop shop": deployed to the user's developer account (`alexa/`, skill `amzn1.ask.skill.ab1fff90-...`, development stage). Checked through Amazon's Alexa simulator against the live site: link by code, offers, two yeses; find, offer, buy, purchase code. Redeploy the package with `ask deploy` from `alexa/` (profile in `C:\Users\asus\.ask\cli_config`).
@@ -167,7 +170,7 @@
 
 ### P2: submission (Wed–Fri)
 - Resolve the TODOs in `docs/SUBMISSION.md`; video ≤ 3:00 (public YouTube, captions, no third-party logos or music, simulations labelled); thumbnails.
-- Final pass on `FRICTION_LOG.md` (23 entries) and `PRODUCT_FEEDBACK.md`.
+- Final pass on `FRICTION_LOG.md` (24 entries) and `PRODUCT_FEEDBACK.md`.
 - Fresh-clone check: `git clone … && corepack enable && pnpm install && pnpm demo` on Windows in under 10 minutes.
 
 **Cut order if time slips:** Fire TV → AgentCore Memory (keep the local twin) → live eBay comps → evidence MP4 clips (frames only) → Ops polish.

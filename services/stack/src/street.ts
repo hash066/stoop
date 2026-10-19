@@ -9,6 +9,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { purchaseCodeHash } from "@stoop/settlement";
+import { inSentence } from "@stoop/shared";
 import type { Stack } from "./compose.ts";
 import { mcpCall, type ToolOut } from "./inproc.ts";
 
@@ -238,7 +239,7 @@ export class Street {
         const n = (await w.stack.settlement.negotiationsFor(t.listingId)).find((x) => x.buyerId === b.buyerId);
         if (n && n.state !== "AGREED_PENDING_SELLER" && n.state !== "OPEN") {
           t.state = "declined";
-          this.say(want, `The owner of the ${t.title} said no to ${$(t.lastOfferMinor ?? 0)}. I’ll keep looking.`, t.shop, t.listingId);
+          this.say(want, `The owner of the ${inSentence(t.title)} said no to ${$(t.lastOfferMinor ?? 0)}. I’ll keep looking.`, t.shop, t.listingId);
         }
       }
     }
@@ -275,7 +276,7 @@ export class Street {
     }
     if (t.state === "talking") {
       t.state = "too_high";
-      this.say(want, `The seller wants more than your ${$(want.maxMinor)} for the ${next.title}. I stopped there.`, next.shop, next.listingId);
+      this.say(want, `The seller wants more than your ${$(want.maxMinor)} for the ${inSentence(next.title)}. I stopped there.`, next.shop, next.listingId);
     }
   }
 
@@ -284,28 +285,28 @@ export class Street {
     const d = r.data;
     if (r.isError || d.kind !== "negotiation") {
       t.state = "declined";
-      this.say(want, `The seller’s assistant didn’t take offers for the ${t.title}: ${r.text.slice(0, 140)}`, t.shop, t.listingId);
+      this.say(want, `The seller’s assistant didn’t take offers for the ${inSentence(t.title)}: ${r.text.slice(0, 140)}`, t.shop, t.listingId);
       return "done";
     }
     if (d.action === "accepted") {
       t.state = "deal";
       t.agreedMinor = t.lastOfferMinor;
       want.status = "found";
-      this.say(want, `Deal: the ${t.title} for ${$(t.lastOfferMinor!)}. Tap Pay to buy it; nothing is charged until the pickup is verified.`, t.shop, t.listingId);
+      this.say(want, `Deal: the ${inSentence(t.title)} for ${$(t.lastOfferMinor!)}. Tap Pay to buy it; nothing is charged until the pickup is verified.`, t.shop, t.listingId);
       return "done";
     }
     if (d.action === "awaiting_seller") {
       t.state = "waiting_owner";
-      this.say(want, `The seller’s assistant says ${$(t.lastOfferMinor!)} could work for the ${t.title}. Waiting for the owner’s yes.`, t.shop, t.listingId);
+      this.say(want, `The seller’s assistant says ${$(t.lastOfferMinor!)} could work for the ${inSentence(t.title)}. Waiting for the owner’s yes.`, t.shop, t.listingId);
       return "done";
     }
     if (d.action === "counter") {
-      this.say(want, `They countered at ${$(d.counterMinor)} for the ${t.title}.`, t.shop, t.listingId);
+      this.say(want, `They countered at ${$(d.counterMinor)} for the ${inSentence(t.title)}.`, t.shop, t.listingId);
       return "counter";
     }
     if (d.action === "declined") return "low";
     t.state = "declined";
-    this.say(want, `The seller’s assistant ended the talk about the ${t.title}.`, t.shop, t.listingId);
+    this.say(want, `The seller’s assistant ended the talk about the ${inSentence(t.title)}.`, t.shop, t.listingId);
     return "done";
   }
 }

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { SettlementError } from "@stoop/settlement";
+import { inSentence } from "@stoop/shared";
 import { elicitUrl, errorResult, result, supportsUrlElicitation, withApproval, type PendingActions } from "./approvals.ts";
 import { uiMeta } from "./cards.ts";
 import type { BuyerActor, StoopContext } from "./context.ts";
@@ -25,10 +26,16 @@ const ORDER_SPEECH: Record<string, string> = {
   VOIDED: "This purchase was cancelled and your hold was released.",
 };
 
+/** Sent in the initialize result: what any host (Alexa+, an MCP client) needs before planning. */
+export const BUYER_INSTRUCTIONS =
+  "Stoop finds secondhand things for sale on porches nearby. Voice first: read tool results as they are, in one or two sentences; never read ids, JSON or URLs; offer at most five options. " +
+  "Flow: search_listings; ask_seller or make_offer (the seller's AI assistant answers within the owner's rules; relay it faithfully); checkout after the owner accepts (the buyer says yes to the full breakdown, and over $100 gives their purchase code); get_pickup_pass; order_status. " +
+  "The payment is held, not charged, until the pickup is verified. The seller's address appears only on the buyer's pickup pass during the window, never through these tools. Never collect card numbers.";
+
 export function createBuyerServer(ctx: StoopContext, actor: BuyerActor, pending: PendingActions, taskStore?: TaskStore): McpServer {
   const server = new McpServer(
     { name: "stoop-buyer", version: "0.1.0", title: "Stoop for buyers" },
-    { capabilities: { logging: {}, ...(taskStore ? { tasks: TASKS_CAPABILITY } : {}) }, taskStore },
+    { capabilities: { logging: {}, ...(taskStore ? { tasks: TASKS_CAPABILITY } : {}) }, taskStore, instructions: BUYER_INSTRUCTIONS },
   );
   const s = ctx.settlement;
   const who = `buyer:${actor.buyerId}`;
@@ -174,7 +181,7 @@ export function createBuyerServer(ctx: StoopContext, actor: BuyerActor, pending:
       const fee = session.totals.find((t) => t.type === "fees")?.amount ?? 0;
       const high = total > 100_00;
       const summary =
-        `Pay ${$(total)} for the ${deal.itemTitle}? That's ${$(deal.amountMinor)} for the item plus ${$(fee)} for verified pickup, and no tax. ` +
+        `Pay ${$(total)} for the ${inSentence(deal.itemTitle)}? That's ${$(deal.amountMinor)} for the item plus ${$(fee)} for verified pickup, and no tax. ` +
         "Refund policy: your payment is held, not charged, until your pickup is verified; if it isn't verified you're never charged.";
       const complete = async (voiceCode?: string) => {
         const res = await ctx.ucp.request(

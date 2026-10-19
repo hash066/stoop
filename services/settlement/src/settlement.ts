@@ -2,7 +2,7 @@
 // accept a deal, or sign a Proof-of-Handoff receipt. Agents and the MCP server call it; they never
 // hold its keys. In AWS it is its own Lambda + IAM role; the address KMS key grants Decrypt only here.
 import { createHash, randomInt } from "node:crypto";
-import type { ApprovalTerms, DealState, HandoffEvidence, Mandate, PickupWindow, PolicyAction, RingEvent } from "@stoop/shared";
+import { inSentence, type ApprovalTerms, type DealState, type HandoffEvidence, type Mandate, type PickupWindow, type PolicyAction, type RingEvent } from "@stoop/shared";
 import {
   acceptable,
   autoAcceptable,
@@ -589,7 +589,7 @@ export class Settlement {
     const approval = await this.requestApproval(
       terms,
       `seller:${l.householdId}`,
-      `${buyer.label} offers $${(amountMinor / 100).toFixed(0)} for the ${l.title}. Accept?`,
+      `${buyer.label} offers $${(amountMinor / 100).toFixed(0)} for the ${inSentence(l.title)}. Accept?`,
     );
     await this.saveNego({ ...n, state: "AGREED_PENDING_SELLER", pendingAmountMinor: amountMinor, pendingApprovalId: approval.id });
     return { decision, approval };

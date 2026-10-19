@@ -22,14 +22,14 @@ describe("Bedrock image handling", () => {
 
   it("identifies an SVG placeholder from the catalog without calling Bedrock", async () => {
     const id = await new BedrockIdentifier("us.amazon.nova-2-lite-v1:0", "us-east-1").identify({ name: "stroller.svg", bytes: SVG, mime: "image/svg+xml" });
-    expect(id?.title).toBe("BOB Revolution jogging stroller");
+    expect(id?.title).toBe("Three-wheel jogging stroller");
     expect(bedrock.commandCalls(ConverseCommand)).toHaveLength(0);
   });
 
   it("falls back to the catalog when Bedrock refuses a real photo", async () => {
     bedrock.on(ConverseCommand).rejects(new Error("ValidationException"));
     const id = await new BedrockIdentifier("us.amazon.nova-2-lite-v1:0", "us-east-1").identify({ name: "stroller.png", bytes: PNG, mime: "image/png" });
-    expect(id?.title).toBe("BOB Revolution jogging stroller");
+    expect(id?.title).toBe("Three-wheel jogging stroller");
     expect(bedrock.commandCalls(ConverseCommand)).toHaveLength(1);
   });
 });
@@ -53,7 +53,7 @@ describe("daily model-call cap (LLM_DAILY_CALL_CAP)", () => {
       // the identifier falls back to the catalog instead of calling Bedrock
       bedrock.on(ConverseCommand).rejects(new Error("must not be called"));
       const id = await new BedrockIdentifier("us.amazon.nova-2-lite-v1:0", "us-east-1").identify({ name: "stroller.png", bytes: PNG, mime: "image/png" });
-      expect(id?.title).toBe("BOB Revolution jogging stroller");
+      expect(id?.title).toBe("Three-wheel jogging stroller");
       expect(bedrock.commandCalls(ConverseCommand)).toHaveLength(0);
     } finally {
       if (prev === undefined) delete process.env.LLM_DAILY_CALL_CAP;

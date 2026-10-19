@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { act, api, ApiError, base, clock, dollars, isPhone, money, request, tokens, toJpeg } from "../api.ts";
+import { act, api, ApiError, base, clock, dollars, inSentence, isPhone, money, request, tokens, toJpeg } from "../api.ts";
 import { ApprovalPrompt, Composer, Thread, useConversation } from "../conversation.tsx";
 import { Alert, Camera, Check, External, Phone, Qr, Receipt, Share as ShareIcon, Spark, Upload, Voice } from "../icons.tsx";
 import { Closed, CopyButton, initials, Link, Loading, navigate, Nav, QR, ShareButton, Spinner, usePoll, useTitle, useToast } from "../ui.tsx";
@@ -434,7 +434,7 @@ function LiveCard({ shop, item }: { shop: string; item: ShopItem }) {
       <button type="button" className="btn soft sm" aria-expanded={post} onClick={() => setPost(!post)}>
         <ShareIcon /> Post Everywhere
       </button>
-      {qr ? <QR text={url} label={`QR code for the ${item.title} listing`} /> : null}
+      {qr ? <QR text={url} label={`QR code for the ${inSentence(item.title)} listing`} /> : null}
       {post ? <PostEverywhere item={item} url={url} /> : null}
     </div>
   );
@@ -511,7 +511,7 @@ function Offers({ shop, token, offers, photoFor, onDone, toast }: { shop: string
             {photo ? <img className="thumb" src={photo} alt="" width={72} height={72} /> : null}
             <div className="stack-s" style={{ flex: 1 }}>
               <p style={{ fontSize: "var(--t-m)" }}>
-                <strong>{buyerName(o.buyer)}</strong> offers <span className="price" style={{ fontSize: "1.75rem" }}>{money(o.amountMinor)}</span> for the {o.title}.
+                <strong>{buyerName(o.buyer)}</strong> offers <span className="price" style={{ fontSize: "1.75rem" }}>{money(o.amountMinor)}</span> for the {inSentence(o.title)}.
               </p>
               <p className="tiny">
                 You asked {money(o.askMinor)}. You’d get {money(o.amountMinor - fee)} after Stoop’s 5% fee, paid once the pickup is verified.
@@ -619,7 +619,7 @@ function SaleCard(p: { shop: string; token: string; sale: Sale; photo?: string; 
       <p className="note warn">
         <Alert />
         <span>
-          Put the {sale.title} out now: {p.porch.replace(/\.$/, "")}.{p.camOn ? "" : " Turn your porch camera on, too."}
+          Put the {inSentence(sale.title)} out now: {p.porch.replace(/\.$/, "")}.{p.camOn ? "" : " Turn your porch camera on, too."}
         </span>
       </p>
     );
@@ -662,7 +662,7 @@ function SaleCard(p: { shop: string; token: string; sale: Sale; photo?: string; 
   const done = PAID_OUT.includes(sale.state);
 
   return (
-    <article className={p.flat ? "stack" : "card stack"} aria-label={`Sale of the ${sale.title}`} style={p.flat ? { paddingTop: 18, borderTop: "1px solid var(--line)" } : undefined}>
+    <article className={p.flat ? "stack" : "card stack"} aria-label={`Sale of the ${inSentence(sale.title)}`} style={p.flat ? { paddingTop: 18, borderTop: "1px solid var(--line)" } : undefined}>
       <div className="row" style={{ gap: 14, flexWrap: "nowrap" }}>
         {p.photo ? <img className="thumb" src={p.photo} alt="" width={72} height={72} /> : null}
         <div style={{ flex: 1 }}>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, clock, tokens } from "../api.ts";
+import { api, ApiError, clock, inSentence, tokens } from "../api.ts";
 import { Camera as CameraIcon, Check as CheckIcon } from "../icons.tsx";
 import { Closed, Link, Nav, useTitle } from "../ui.tsx";
 
@@ -256,7 +256,7 @@ export function Camera({ shop }: { shop: string }) {
               {watching.length ? (
                 <div className="card stack-s" style={{ background: "rgb(255 200 61 / 0.14)" }}>
                   <span className="badge sun">Pickup in progress</span>
-                  <p>Watching for the pickup of {watching.join(", ")}.</p>
+                  <p>Watching for the pickup of the {watching.map(inSentence).join(", the ")}.</p>
                 </div>
               ) : null}
               <p className="muted">Leave this page open, on screen and plugged in. Stoop checks in with it every second.</p>

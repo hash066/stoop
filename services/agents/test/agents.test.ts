@@ -37,7 +37,7 @@ async function setup(opts: { floor?: number; autoAccept?: number } = {}) {
   const buyer = await s.createBuyer({ displayName: "B", email: "b@x", voiceCode: "1234", walletToken: "tok_1" });
   const item = await s.createItem({
     householdId: hh.id,
-    title: "BOB Revolution jogging stroller",
+    title: "Three-wheel jogging stroller",
     category: "stroller",
     condition: "B",
     photoHashes: [],
@@ -248,6 +248,17 @@ describe("offline planner", () => {
     // open conversation stays with the model
     const chat = { calls: [{ name: "ask_seller", args: { listingId: "lst_1", message: "Is it in good condition?" } }], planner: "bedrock:nova" };
     expect(reconcilePlan(chat, planOffline("Is it in good condition?", state, buyerTools))).toBe(chat);
+  });
+
+  it("acts on a clear offer when the model only asks a question (found live: Nova asked for 'the listing ID')", () => {
+    const state = { role: "buyer" as const, activeListingId: "lst_1", lastListingIds: ["lst_1"] };
+    const talk = { calls: [], say: "Which item are you referring to (the listing ID)?", planner: "bedrock:nova" };
+    const plan = reconcilePlan(talk, planOffline("Okay, how about $95?", state, buyerTools));
+    expect(plan.calls).toEqual([{ name: "make_offer", args: { listingId: "lst_1", amountDollars: 95, message: "Okay, how about $95?" } }]);
+    expect(plan.say).toBeUndefined();
+    expect(plan.planner).toBe("bedrock:nova+parsed-intent");
+    // small talk the parser would only forward to the seller stays with the model
+    expect(reconcilePlan(talk, planOffline("thanks, that's helpful", state, buyerTools))).toBe(talk);
   });
 
   it("buyer search, offer, checkout with voice code", () => {

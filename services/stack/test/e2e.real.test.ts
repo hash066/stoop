@@ -74,13 +74,13 @@ describe("real two-device flow with a porch camera (no demo data)", () => {
       const search = await call(stack, "buyer", buyer, "search_listings", { query: "stroller", maxPriceDollars: 150 });
       const listingId = search.data.results[0].listingId as string;
       const pub = await http(stack, "GET", `/web/listing/${listingId}`);
-      expect(pub.json).toMatchObject({ title: "BOB Revolution jogging stroller", askMinor: 120_00, zip: "62704" });
+      expect(pub.json).toMatchObject({ title: "Three-wheel jogging stroller", askMinor: 120_00, zip: "62704" });
       expect(JSON.stringify(pub.json)).not.toMatch(/Elm St/);
       await call(stack, "buyer", buyer, "make_offer", { listingId, amountDollars: 95 });
       // both dashboards see the offer waiting on the seller
       const sst = (await http(stack, "GET", "/web/seller/state", undefined, { Authorization: `Bearer ${seller}` })).json;
       expect(sst.offers).toEqual([expect.objectContaining({ listingId, amountMinor: 95_00, askMinor: 120_00 })]);
-      expect(sst.items[0]).toMatchObject({ title: "BOB Revolution jogging stroller", priceSource: "comps", listing: { id: listingId, state: "LIVE" } });
+      expect(sst.items[0]).toMatchObject({ title: "Three-wheel jogging stroller", priceSource: "comps", listing: { id: listingId, state: "LIVE" } });
       expect(sst.conversations[0].offers[0]).toMatchObject({ by: "buyer", amountMinor: 95_00 });
       const bst = (await http(stack, "GET", `/web/buyer/state?listing=${listingId}`, undefined, { Authorization: `Bearer ${buyer}` })).json;
       expect(bst).toMatchObject({ me: { displayName: "Ben" }, negotiation: { state: "AGREED_PENDING_SELLER", pendingAmountMinor: 95_00 }, deals: [] });

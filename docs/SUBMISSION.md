@@ -71,7 +71,7 @@ AI agents already sell for people. In late September 2026 a Big Tech shopping ag
 
 ## Challenges we ran into
 
-From `docs/FRICTION_LOG.md` (23 entries), for example:
+From `docs/FRICTION_LOG.md` (24 entries), for example:
 - The Ring Playground simulates live view but doesn't deliver webhooks, so we built a signed simulator.
 - Alexa+ add-on tooling is partner-only, so we built our own MCP client and MCP Apps host.
 - A new AWS account unlocked Bedrock within the hour but kept CloudFormation and SQS behind `OptInRequired`.

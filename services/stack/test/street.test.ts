@@ -61,7 +61,7 @@ describe("Stoop Street", () => {
     const page = await s.app.fetch(new Request(`${ORIGIN}/shop/${ana.id}/item/${ana.listingId}`));
     if (page.status === 200) {
       const html = await page.text();
-      expect(html).toContain('<meta property="og:title" content="BOB Revolution jogging stroller · $120">');
+      expect(html).toContain('<meta property="og:title" content="Three-wheel jogging stroller · $120">');
       expect(html).toMatch(/og:image" content="http:\/\/stoop\.test\/s\/[^"]+\/photos\//);
       expect(html).not.toMatch(/St, Springfield/);
     }

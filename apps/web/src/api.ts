@@ -235,6 +235,8 @@ export function deviceId() {
 
 const usd0 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const usd2 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
+/** A title mid-sentence: "Three-wheel jogging stroller" -> "three-wheel jogging stroller"; names with capitals keep them. */
+export const inSentence = (title: string) => (/[A-Z]/.test(title.slice(1)) ? title : title.charAt(0).toLowerCase() + title.slice(1));
 export const money = (minor: number) => (minor % 100 ? usd2 : usd0).format(minor / 100);
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 export const clock = (ms: number) => timeFmt.format(new Date(ms));

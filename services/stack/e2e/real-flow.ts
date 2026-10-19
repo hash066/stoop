@@ -62,7 +62,9 @@ async function open(name: string, opts: Parameters<typeof browser.newContext>[0]
   const ctx = await browser.newContext({ ...opts, permissions: ["camera", "clipboard-read", "clipboard-write"] });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => errors.push(`${name}: ${e.message} | ${(e.stack ?? "").split(/\r?\n/).slice(1, 5).join(" | ")}`));
-  page.on("console", (m) => m.type() === "error" && !/favicon/.test(m.text()) && errors.push(`${name} console: ${m.text()}`));
+  page.on("console", (m) => m.type() === "error" && !/favicon/.test(m.text()) && errors.push(`${name} console: ${m.text()}${m.location().url ? ` <- ${m.location().url}` : ""}`));
+  // which request failed, and how (the console line alone doesn't say)
+  page.on("response", (r) => r.status() >= 400 && !/favicon/.test(r.url()) && errors.push(`${name} HTTP ${r.status()} ${r.request().method()} ${r.url().replace(/(token|key)=[^&]+/g, "$1=…")}`));
   return page;
 }
 let n = 0;

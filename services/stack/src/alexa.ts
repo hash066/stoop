@@ -9,6 +9,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import * as Alexa from "ask-sdk-core";
 import type { RequestEnvelope, ResponseEnvelope } from "ask-sdk-model";
 import { mcpCall, type ToolOut } from "./inproc.ts";
+import { inSentence } from "@stoop/shared";
 
 /** What the skill needs from a shop: its world's HTTP app, and whose shop a seller token opens. */
 export interface ShopHandle {
@@ -183,7 +184,7 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
   const SHOP_FIRST = "To shop by voice, open Your Stoop on the Stoop website, tap Get a Code under Shop by voice, and tell me the six digits.";
   const zipSaid = (z: string) => `<say-as interpret-as="digits">${z}</say-as>`;
   const describe = (r: Found, i: number, n: number) =>
-    `${i === 0 ? (n === 1 ? "I found one" : `I found ${n}. The first`) : "Next"}: the ${r.title} for ${$(r.askMinor)}, porch pickup in ${zipSaid(r.zip)}, from ${r.shopName.replace("’", "'")}${r.rating.verified ? `, with ${r.rating.verified} verified pickup${r.rating.verified === 1 ? "" : "s"}` : ""}. Want to make an offer${i < n - 1 ? ", or hear the next one" : ""}?`;
+    `${i === 0 ? (n === 1 ? "I found one" : `I found ${n}. The first`) : "Next"}: the ${inSentence(r.title)} for ${$(r.askMinor)}, porch pickup in ${zipSaid(r.zip)}, from ${r.shopName.replace("’", "'")}${r.rating.verified ? `, with ${r.rating.verified} verified pickup${r.rating.verified === 1 ? "" : "s"}` : ""}. Want to make an offer${i < n - 1 ? ", or hear the next one" : ""}?`;
   const current = (h: Input) => {
     const a = attrs(h);
     return a.results?.[a.idx ?? 0];

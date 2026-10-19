@@ -80,6 +80,32 @@
   - The account activation state is opaque: Bedrock worked while CloudFormation, KMS, DynamoDB, Lambda, Step Functions and SQS answered `OptInRequired` for hours (friction #15).
   - KMS: the documented key-administrator statement includes `kms:CreateGrant`, a side door to Decrypt (friction #16). JWS ES256 from KMS needs a DER → raw conversion that every team rewrites; we published ours in `proof-of-handoff` (`derToRawP256`).
   - CDK: what a custom key `policy` replaces depends on a feature flag (friction #17).
-- **AgentCore:** the control plane answered, but Runtime, Memory and Observability wait for the rest of the account to activate.
-- **Onboarding:** minutes for Bedrock once unlocked; the AWS deploy is still blocked on activation.
+  - Nova 2 Lite with Converse tool use sometimes answers with a clarifying question instead of calling a tool, even when the system prompt holds everything the call needs (it asked a buyer for "the listing ID"; friction #24). We let a deterministic parser win when the words are unambiguous.
+  - Nova invented a brand for a plain drawing when our prompt asked for "brand model type"; asking for what is visible, and a brand only when legible, fixed it.
+- **Onboarding:** minutes for Bedrock once unlocked; the full deploy (both CDK stacks) worked once the account finished activating on Oct 19.
+- **Build again?** Yes.
+
+## Amazon Bedrock AgentCore Runtime (CDK `CfnRuntime`, `@aws-sdk/client-bedrock-agentcore`)
+
+- **Used for:** hosting the Strands negotiator as a Node 22 code deployment. Each buyer message is one `InvokeAgentRuntime` call (session = the negotiation); the agent reaches the shop only through a one-time negotiation port, so it never holds the address or the owner's floor.
+- **Worked well:**
+  - Code deployment needs no container: one esbuild bundle as a CDK S3 asset, `/ping` and `/invocations`, and the runtime was up.
+  - Session ids map cleanly onto a conversation; each turn took 1 to 2 s end to end, and stdout lines land in CloudWatch with no extra setup.
+  - IAM is tight: the execution role only needs Nova and its own logs, and only the sites' instance role may invoke this runtime.
+- **Needs work:**
+  - NODE_22 rejected an ES module entry point named `.mjs` at deploy time ("your file should end with .js extension"), and the stack had to be deleted after the rollback (friction #21). The docs don't say how ESM is chosen.
+- **Onboarding:** the code-deployment path ran our agent without a Dockerfile; the only real obstacle was the entry point (above).
+- **Build again?** Yes, for any agent that should run apart from the app that holds the secrets.
+
+## Alexa Skills Kit (`ask-sdk-core`, `ask-sdk-express-adapter`, ASK CLI 2.30, SMAPI simulation)
+
+- **Used for:** the custom skill "stoop shop": sellers hear and accept offers, buyers find, offer and pay with their purchase code, all on the same MCP tools as the web app. Requests are checked with the adapter's signature and timestamp verifiers; `ask deploy` ships the skill package; `simulate-skill` drives real Alexa language understanding against the live site.
+- **Worked well:**
+  - The handler model (`canHandle`/`handle`, session attributes) maps onto a two-step voice approval with little code.
+  - `SkillRequestSignatureVerifier` and `TimestampVerifier` work outside Express, on any web-standard request.
+  - `ask smapi simulate-skill` returns the matched intent and the skill's exact response, which made every voice line testable.
+- **Needs work:**
+  - `ask configure` waits on a terminal question after the browser sign-in ("Do you confirm you used the browser..."), so in an automated or non-interactive shell the sign-in never saves. We wrote a small local redirect handler instead.
+  - Alexa+ add-on (MCP) tooling isn't open to everyone yet, so a team building an MCP add-on can test it on Alexa only through a custom skill.
+- **Onboarding:** quick once the CLI sign-in worked; the sign-in itself was the hard part (above).
 - **Build again?** Yes.

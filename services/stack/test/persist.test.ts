@@ -68,7 +68,7 @@ describe("hosted shops survive a restart", () => {
     expect(b.s.worlds.has(shop.id)).toBe(true);
     const st = (await b.req("GET", `/s/${shop.id}/web/seller/state`, undefined, S)).json;
     expect(st.shop).toMatchObject({ displayName: "Ana", zip: "62704" });
-    expect(st.items[0]).toMatchObject({ title: "BOB Revolution jogging stroller", listing: { id: listingId } });
+    expect(st.items[0]).toMatchObject({ title: "Three-wheel jogging stroller", listing: { id: listingId } });
     expect(st.sales[0]).toMatchObject({ state: "WINDOW_OPEN", amountMinor: 95_00 });
     // the address was encrypted with this shop's own key, which came back with it
     expect((await b.req("GET", `/s/${shop.id}/pass/${deal.passId}`, undefined, dev)).json.address).toBe("12 Elm St, Springfield, IL");

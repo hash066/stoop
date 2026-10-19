@@ -175,6 +175,10 @@ const COMMAND_TOOLS = new Set(["checkout", "respond_to_offer", "confirm_action",
 export function reconcilePlan(model: Plan, offline: Plan): Plan {
   const command = offline.calls.find((c) => COMMAND_TOOLS.has(c.name));
   if (command && !model.calls.some((c) => c.name === command.name)) return { ...offline, planner: `${model.planner}+explicit-command` };
+  // The model only talked, but the user's words map to a clear action (found live: Nova answered
+  // "Okay, how about $95?" by asking for "the listing ID" although the state named the listing).
+  // A generic question to the seller doesn't count: the model may have a better answer for that.
+  if (!model.calls.length && offline.calls.length && offline.calls[0]!.name !== "ask_seller") return { ...offline, planner: `${model.planner}+parsed-intent` };
   return withStatedConstraints(model, offline);
 }
 

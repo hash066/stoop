@@ -62,7 +62,8 @@ async function step(n, name, fn) {
 }
 
 try {
-  await page.goto(BASE + '/', { waitUntil: 'networkidle' });
+  // the web app owns the site root; the Alexa+ device tour lives at /demo
+  await page.goto(BASE + '/demo', { waitUntil: 'networkidle' });
   await page.getByText('Try it in your browser', { exact: true }).click();
   await page.waitForURL(/\/s\/[^/]+\/$/, { timeout: 15_000 });
   log(`sandbox ${page.url()}`);

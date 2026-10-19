@@ -87,7 +87,7 @@ describe("BedrockVision input hygiene", () => {
     const svg = new TextEncoder().encode("<svg/>");
     const v = await new BedrockVision("us.amazon.nova-2-lite-v1:0", "us-east-1").assess({
       frame: { bytes: jpeg, mime: "image/jpeg", at: 1, origin: "ring", sourceName: "ring_snapshot" },
-      itemTitle: "BOB Revolution jogging stroller",
+      itemTitle: "Three-wheel jogging stroller",
       referencePhotos: [{ bytes: svg, mime: "image/svg+xml" }],
     });
     expect(v.presence).toBe("absent");
