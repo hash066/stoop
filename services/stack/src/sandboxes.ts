@@ -14,6 +14,7 @@ import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { extname, join, normalize, sep } from "node:path";
 import { Hono, type Context } from "hono";
+import { modelCallsToday } from "@stoop/shared";
 import { z } from "zod";
 import { createStack, type Stack } from "./compose.ts";
 import { landingHtml, tourHtml, expiredHtml } from "./site.ts";
@@ -112,7 +113,7 @@ export async function createSandboxServer(o: SandboxServerOptions) {
 
   const app = new Hono();
 
-  app.get("/healthz", (c) => c.json({ ok: true, worlds: worlds.size, maxWorlds }));
+  app.get("/healthz", (c) => c.json({ ok: true, worlds: worlds.size, maxWorlds, modelCalls: modelCallsToday() }));
   app.get("/", (c) => c.html(landingHtml()));
 
   app.post("/api/sandboxes", async (c) => {

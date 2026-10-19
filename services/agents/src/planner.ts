@@ -2,6 +2,7 @@
 // LLM; in our sim it's Bedrock (tool use over the MCP tools/list) or an offline intent parser.
 // Speech is shaped by the tools' returned text (Alexa add-on design guide), so the planner only plans.
 import { BedrockRuntimeClient, ConverseCommand, type Tool as BedrockTool } from "@aws-sdk/client-bedrock-runtime";
+import { takeModelCalls } from "@stoop/shared";
 import { llmMode, modelIdFor } from "./llm.ts";
 import { parseMoneyMinor } from "./negotiator.ts";
 
@@ -151,7 +152,7 @@ export async function planBedrock(utterance: string, state: PlannerState, tools:
 }
 
 export async function planTurn(utterance: string, state: PlannerState, tools: McpToolInfo[], skill: string): Promise<Plan> {
-  if (llmMode() === "bedrock") {
+  if (llmMode() === "bedrock" && takeModelCalls(1)) {
     try {
       return await planBedrock(utterance, state, tools, skill);
     } catch {

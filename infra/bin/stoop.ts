@@ -15,5 +15,9 @@ const host = new HostStack(app, "StoopHostStack", {
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION ?? "us-east-1" },
   description: "Stoop: public tester sandboxes and judge sandboxes behind CloudFront",
   repoUrl: "https://github.com/hash066/stoop.git",
+  // spending guardrails: STOOP_BUDGET_EMAIL=you@example.com at deploy time (kept out of git)
+  budgetEmail: process.env.STOOP_BUDGET_EMAIL,
+  monthlyCapUsd: 30,
+  judgeDailyModelCalls: 2000,
 });
 Tags.of(host).add("project", "stoop");

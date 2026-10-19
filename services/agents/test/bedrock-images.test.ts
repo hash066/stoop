@@ -33,3 +33,31 @@ describe("Bedrock image handling", () => {
     expect(bedrock.commandCalls(ConverseCommand)).toHaveLength(1);
   });
 });
+
+describe("daily model-call cap (LLM_DAILY_CALL_CAP)", () => {
+  it("stops paid calls at the cap so callers take their offline path; no cap when unset", async () => {
+    const { takeModelCalls, modelCallsToday } = await import("@stoop/shared");
+    bedrock.reset();
+    const prev = process.env.LLM_DAILY_CALL_CAP;
+    try {
+      delete process.env.LLM_DAILY_CALL_CAP;
+      expect(takeModelCalls(1000)).toBe(true);
+      process.env.LLM_DAILY_CALL_CAP = "4";
+      const start = modelCallsToday().used;
+      expect(start).toBeGreaterThanOrEqual(0);
+      process.env.LLM_DAILY_CALL_CAP = String(start + 4);
+      expect(takeModelCalls(3)).toBe(true);
+      expect(takeModelCalls(3)).toBe(false); // would exceed
+      expect(takeModelCalls(1)).toBe(true);
+      expect(takeModelCalls(1)).toBe(false);
+      // the identifier falls back to the catalog instead of calling Bedrock
+      bedrock.on(ConverseCommand).rejects(new Error("must not be called"));
+      const id = await new BedrockIdentifier("us.amazon.nova-2-lite-v1:0", "us-east-1").identify({ name: "stroller.png", bytes: PNG, mime: "image/png" });
+      expect(id?.title).toBe("BOB Revolution jogging stroller");
+      expect(bedrock.commandCalls(ConverseCommand)).toHaveLength(0);
+    } finally {
+      if (prev === undefined) delete process.env.LLM_DAILY_CALL_CAP;
+      else process.env.LLM_DAILY_CALL_CAP = prev;
+    }
+  });
+});

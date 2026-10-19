@@ -2,7 +2,7 @@
 // Rules: categorical labels only (no fake similarity scores); never identify people (Ring content
 // policy restricts face recognition to customer-enrolled faces; we use none).
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
-import { bedrockImageFormat, type ItemPresence } from "@stoop/shared";
+import { bedrockImageFormat, takeModelCalls, type ItemPresence } from "@stoop/shared";
 import type { Frame } from "@stoop/ring-bridge";
 
 export interface VisionInput {
@@ -65,6 +65,8 @@ export class BedrockVision implements VisionAdapter {
   async assess(input: VisionInput): Promise<VisionVerdict> {
     const frameFormat = bedrockImageFormat(input.frame.mime, input.frame.bytes);
     if (!frameFormat) return { presence: input.frame.label ?? "unsure", rationale: "Placeholder frame (not an image Bedrock accepts) skipped.", adapter: this.name };
+    // over the daily model budget: never guess; unsure leads to retries, then human review
+    if (!takeModelCalls(1)) return { presence: input.frame.label ?? "unsure", rationale: "Daily model budget reached; no vision call made.", adapter: this.name };
     // An unsendable reference photo (e.g. an SVG placeholder) would make Bedrock reject the whole call
     const refs = (input.referencePhotos ?? [])
       .flatMap((p) => {

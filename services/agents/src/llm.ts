@@ -3,6 +3,7 @@
 // offline. Model ids come from env (BEDROCK_MODEL_ID_<ROLE>); Nova 2 Lite is the guaranteed baseline.
 import { BedrockModel, Model, type Message, type StreamOptions, type ToolSpec } from "@strands-agents/sdk";
 import type { ModelStreamEvent } from "@strands-agents/sdk";
+import { takeModelCalls } from "@stoop/shared";
 
 export type AgentRole = "NEGOTIATOR" | "APPRAISER" | "BUYERBOT" | "PLANNER" | "VISION";
 
@@ -125,7 +126,8 @@ function lastTurnResults(messages: Message[], toolNames: Map<string, string>): S
 
 /** Model for a role: Bedrock in LLM_MODE=bedrock, else the given offline script. */
 export function createModel(role: AgentRole, offlineScript: Script): Model {
-  if (llmMode() === "bedrock") {
+  // an agent turn makes about 3 model calls; over the daily cap the same agent runs offline
+  if (llmMode() === "bedrock" && takeModelCalls(3)) {
     return new BedrockModel({
       region: process.env.AWS_REGION ?? "us-east-1",
       modelId: modelIdFor(role),

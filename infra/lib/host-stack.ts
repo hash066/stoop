@@ -5,6 +5,7 @@
 //   :8081  judge   - LLM_MODE=bedrock (Nova 2 Lite), up to 10 sandboxes
 // Feedback goes to /opt/stoop-data/feedback.jsonl; GET /api/feedback.jsonl?key=<AdminKey secret>.
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
+import * as budgets from "aws-cdk-lib/aws-budgets";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
@@ -15,6 +16,12 @@ import type { Construct } from "constructs";
 export interface HostStackProps extends StackProps {
   repoUrl: string;
   branch?: string;
+  /** Where budget alerts go. Passed in at deploy time (STOOP_BUDGET_EMAIL) so it never lands in git. */
+  budgetEmail?: string;
+  /** Monthly spending cap in USD (default 30). */
+  monthlyCapUsd?: number;
+  /** Paid model-call units per day on the judge site (default 2000). */
+  judgeDailyModelCalls?: number;
 }
 
 export class HostStack extends Stack {
@@ -61,7 +68,7 @@ export class HostStack extends Stack {
       `ADMIN_KEY=$(aws secretsmanager get-secret-value --region ${this.region} --secret-id ${adminKey.secretArn} --query SecretString --output text)`,
       "install -d -o 1000 -g 1000 /opt/stoop-data-public /opt/stoop-data-judge",
       run("public", 8080, ""),
-      run("judge", 8081, `-e LLM_MODE=bedrock -e AWS_REGION=${this.region} -e MAX_SANDBOXES=10`),
+      run("judge", 8081, `-e LLM_MODE=bedrock -e AWS_REGION=${this.region} -e MAX_SANDBOXES=10 -e LLM_DAILY_CALL_CAP=${props.judgeDailyModelCalls ?? 2000}`),
     );
 
     const instance = new ec2.Instance(this, "Host", {
@@ -96,6 +103,65 @@ export class HostStack extends Stack {
       });
     const pub = site("PublicSite", 8080, "Stoop: public sandboxes for testers");
     const judge = site("JudgeSite", 8081, "Stoop: judge sandboxes on Amazon Bedrock");
+
+    // Spending guardrails. Inside the app: the judge site's daily model-call cap (instant). In AWS:
+    // a monthly budget whose actions stop the instance and deny Bedrock at the cap (billing data
+    // lags by hours, so this is the backstop, not the first line).
+    if (props.budgetEmail) {
+      const cap = props.monthlyCapUsd ?? 30;
+      const subscribers = [{ subscriptionType: "EMAIL", address: props.budgetEmail }];
+      const budget = new budgets.CfnBudget(this, "SpendCap", {
+        budget: {
+          budgetName: `stoop-cap-${cap}usd`,
+          budgetType: "COST",
+          timeUnit: "MONTHLY",
+          budgetLimit: { amount: cap, unit: "USD" },
+          costTypes: { includeCredit: false, includeRefund: false },
+        },
+        notificationsWithSubscribers: [50, 80, 100].map((threshold) => ({
+          notification: { notificationType: "ACTUAL", comparisonOperator: "GREATER_THAN", threshold, thresholdType: "PERCENTAGE" },
+          subscribers,
+        })),
+      });
+      const denyBedrock = new iam.ManagedPolicy(this, "SpendStop", {
+        description: "Attached to the host role by the budget action at the spending cap",
+        statements: [new iam.PolicyStatement({ effect: iam.Effect.DENY, actions: ["bedrock:*"], resources: ["*"] })],
+      });
+      // The role AWS Budgets assumes to act: stop this instance through SSM (managed policy), and
+      // attach/detach exactly the deny policy, on exactly the host role.
+      const actionsRole = new iam.Role(this, "BudgetActionsRole", {
+        assumedBy: new iam.ServicePrincipal("budgets.amazonaws.com"),
+        managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName("AWSBudgetsActions_RolePolicyForResourceAdministrationWithSSM")],
+      });
+      actionsRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ["iam:AttachRolePolicy", "iam:DetachRolePolicy"],
+          resources: [role.roleArn],
+          conditions: { ArnEquals: { "iam:PolicyARN": denyBedrock.managedPolicyArn } },
+        }),
+      );
+      actionsRole.addToPolicy(
+        new iam.PolicyStatement({ actions: ["iam:PassRole"], resources: [actionsRole.roleArn], conditions: { StringEquals: { "iam:PassedToService": "ssm.amazonaws.com" } } }),
+      );
+      const atCap = {
+        budgetName: budget.ref,
+        notificationType: "ACTUAL",
+        actionThreshold: { type: "PERCENTAGE", value: 100 },
+        approvalModel: "AUTOMATIC",
+        executionRoleArn: actionsRole.roleArn,
+        subscribers: [{ type: "EMAIL", address: props.budgetEmail }],
+      };
+      new budgets.CfnBudgetsAction(this, "StopHostAtCap", {
+        ...atCap,
+        actionType: "RUN_SSM_DOCUMENTS",
+        definition: { ssmActionDefinition: { subtype: "STOP_EC2_INSTANCES", region: this.region, instanceIds: [instance.instanceId] } },
+      });
+      new budgets.CfnBudgetsAction(this, "DenyBedrockAtCap", {
+        ...atCap,
+        actionType: "APPLY_IAM_POLICY",
+        definition: { iamActionDefinition: { policyArn: denyBedrock.managedPolicyArn, roles: [role.roleName] } },
+      });
+    }
 
     new CfnOutput(this, "PublicUrl", { value: `https://${pub.distributionDomainName}` });
     new CfnOutput(this, "JudgeUrl", { value: `https://${judge.distributionDomainName}` });

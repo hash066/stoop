@@ -3,7 +3,7 @@
 // comps (cached asking prices or eBay Browse), never invented: fewer than 3 comps = "low confidence".
 import { createHash } from "node:crypto";
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
-import { bedrockImageFormat } from "@stoop/shared";
+import { bedrockImageFormat, takeModelCalls } from "@stoop/shared";
 import { matchCatalog, type CatalogEntry } from "./catalog.ts";
 import { llmMode, modelIdFor } from "./llm.ts";
 import type { RecallChecker, RecallVerdict } from "./recall.ts";
@@ -73,8 +73,8 @@ export class BedrockIdentifier implements Identifier {
   }
   async identify(photo: PhotoInput): Promise<Identification | undefined> {
     const format = bedrockImageFormat(photo.mime, photo.bytes);
-    // No bytes, or a format Bedrock rejects (the SVG demo placeholders): the deterministic catalog
-    if (!photo.bytes || !format) return new CatalogIdentifier().identify(photo);
+    // No bytes, a format Bedrock rejects (the SVG demo placeholders), or the daily cap: the catalog
+    if (!photo.bytes || !format || !takeModelCalls(1)) return new CatalogIdentifier().identify(photo);
     let out;
     try {
       out = await this.client.send(
