@@ -33,6 +33,8 @@ const server = await createSandboxServer({
   shopIdleMs: Number(process.env.SHOP_IDLE_HOURS ?? 72) * 3_600_000,
   deviceDemo: process.env.DEVICE_DEMO === "1",
   alexaSkillId: process.env.ALEXA_SKILL_ID || undefined,
+  // shops are saved under DATA_DIR/worlds and come back after a redeploy
+  persist: process.env.PERSIST_SHOPS !== "0",
 });
 
 const http = serve({ fetch: server.app.fetch, port, hostname: "0.0.0.0" }, () => {

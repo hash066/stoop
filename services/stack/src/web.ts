@@ -6,12 +6,13 @@ import { createHash, randomBytes } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import type { BuyerActor, SellerActor } from "@stoop/mcp-server";
-import type { Deal, EventBus, Item, Settlement } from "@stoop/settlement";
+import type { Deal, EventBus, Item, Settlement, Store } from "@stoop/settlement";
 import type { VisionAdapter } from "@stoop/verifier";
 import { frameFromDataUrl, type PorchCamSource } from "./porchcam.ts";
 
 export interface WebDeps {
   settlement: Settlement;
+  store: Store;
   sellers: Map<string, SellerActor>;
   buyers: Map<string, BuyerActor>;
   otps: Map<string, string>;
@@ -21,6 +22,9 @@ export interface WebDeps {
   now: () => number;
   /** The latest before/after porch frame the verifier assessed, for the seller's own dashboard. */
   frame?: (dealId: string, kind: "before" | "after") => { bytes: Uint8Array; mime: string } | undefined;
+  /** Camera links (token -> camera) and owners; passed in so a snapshot can save them. */
+  camTokens?: Map<string, { cam: string; householdId: string }>;
+  camOwner?: Map<string, string>;
 }
 
 const ShopInput = z.object({
@@ -29,6 +33,25 @@ const ShopInput = z.object({
   zip: z.string().trim().regex(/^[A-Za-z0-9 -]{3,10}$/),
   porchInstructions: z.string().trim().min(1).max(300),
 });
+const ReviewInput = z.object({
+  dealId: z.string().min(1),
+  rating: z.number().int().min(1).max(5),
+  text: z.string().trim().max(280).optional(),
+});
+
+/** A buyer's review of a pickup. `receiptId` points at the signed proof-of-handoff receipt for it. */
+export interface ShopReview {
+  dealId: string;
+  listingId: string;
+  itemTitle: string;
+  rating: number;
+  text?: string;
+  by: string;
+  receiptId?: string;
+  verified: boolean;
+  at: number;
+}
+
 const BuyerInput = z.object({
   displayName: z.string().trim().min(1).max(40),
   purchaseCode: z.string().regex(/^\d{4}$/),
@@ -52,8 +75,8 @@ export function webRouter(d: WebDeps) {
   const buyer = (c: Context) => d.buyers.get(bearer(c));
   const lastPresenceCheck = new Map<string, number>();
   // camera link tokens: they can only send porch frames, nothing else
-  const camTokens = new Map<string, { cam: string; householdId: string }>();
-  const camOwner = new Map<string, string>(); // camera id -> household id
+  const camTokens = d.camTokens ?? new Map<string, { cam: string; householdId: string }>();
+  const camOwner = d.camOwner ?? new Map<string, string>(); // camera id -> household id
 
   /** The porch camera page authenticates with its own camera token, or the seller's token plus the camera id. */
   const camAuth = (c: Context, cam?: string) => {
@@ -110,9 +133,43 @@ export function webRouter(d: WebDeps) {
     return c.json({
       displayName: hh.displayName,
       zip: hh.zip,
+      ...(await reviewSummary(true)),
       listings: listings.map((l) => ({ id: l.id, title: l.title, askMinor: l.askMinor, state: l.state, photoUrl: l.photoUrls[0] })),
     });
   });
+  // ---- reviews: only the buyer of a finished sale can write one, once; a camera-verified pickup's
+  // review carries its signed receipt, so anyone can check it happened (like a verified purchase, provable)
+  web.post("/review", async (c) => {
+    const b = buyer(c);
+    if (!b) return c.json({ error: "unauthorized" }, 401);
+    const p = ReviewInput.safeParse(await c.req.json().catch(() => undefined));
+    if (!p.success) return c.json({ error: "invalid", fields: p.error.issues.map((i) => i.path.join(".")) }, 400);
+    const deal = await d.settlement.getDeal(p.data.dealId).catch(() => undefined);
+    if (!deal || deal.buyerId !== b.buyerId) return c.json({ error: "not_found" }, 404);
+    if (!["INSPECTION", "CAPTURED", "PAYOUT_RECORDED", "CLOSED"].includes(deal.state)) return c.json({ error: "too_early", message: "You can review once you have the item." }, 409);
+    const receiptId = deal.receiptIds.at(-1);
+    const review: ShopReview = {
+      dealId: deal.id,
+      listingId: deal.listingId,
+      itemTitle: deal.itemTitle,
+      rating: p.data.rating,
+      text: p.data.text || undefined,
+      by: b.displayName.split(/\s+/)[0]!.slice(0, 24),
+      receiptId,
+      verified: !!receiptId && deal.verdict === "VERIFIED",
+      at: d.now(),
+    };
+    if (!(await d.store.put(`review#${deal.id}`, review, { ifAbsent: true }))) return c.json({ error: "already_reviewed", message: "You already reviewed this pickup." }, 409);
+    d.bus.emit({ type: "review_posted", at: d.now(), dealId: deal.id, rating: review.rating, verified: review.verified });
+    return c.json({ ok: true, review });
+  });
+  web.get("/reviews", async (c) => c.json(await reviewSummary(true)));
+  async function reviewSummary(withList = false) {
+    const all = (await d.store.list<ShopReview>("review#")).sort((a, b) => b.at - a.at);
+    const avg = all.length ? Math.round((all.reduce((t, r) => t + r.rating, 0) / all.length) * 10) / 10 : null;
+    return { rating: { avg, count: all.length, verified: all.filter((r) => r.verified).length }, ...(withList ? { reviews: all.slice(0, 30) } : {}) };
+  }
+
   web.get("/listing/:id", async (c) => {
     try {
       const l = await d.settlement.getListing(c.req.param("id"));
@@ -180,6 +237,7 @@ export function webRouter(d: WebDeps) {
     const negos = listingId ? (await st.negotiationsFor(listingId)).filter((n) => n.buyerId === b.buyerId).sort((a, x) => x.updatedAt - a.updatedAt) : [];
     const n = negos[0];
     const deals = (await st.dealsForBuyer(b.buyerId)).sort((a, x) => x.createdAt - a.createdAt);
+    const reviewed = new Set((await d.store.list<ShopReview>("review#")).map((r) => r.dealId));
     return c.json({
       me: { displayName: b.displayName },
       negotiation: n ? { state: n.state, offers: negos.flatMap((x) => x.offers).sort((a, x) => a.at - x.at).slice(-16), lastCounterMinor: n.lastCounterMinor, pendingAmountMinor: n.pendingAmountMinor } : null,
@@ -194,6 +252,7 @@ export function webRouter(d: WebDeps) {
         passId: deal.passId ?? null,
         verdict: deal.verdict ?? null,
         active: !DONE.includes(deal.state),
+        reviewed: reviewed.has(deal.id),
       })),
     });
   });

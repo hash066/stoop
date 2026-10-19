@@ -22,10 +22,18 @@ export class PorchCamSource implements FrameSource {
     this.waitMs = o.waitMs ?? 20_000;
   }
 
-  register(): string {
-    const id = `porchcam_${randomBytes(6).toString("hex")}`;
-    this.cams.set(id, { id, waiters: [], lastSeen: this.now() });
+  register(id = `porchcam_${randomBytes(6).toString("hex")}`): string {
+    if (!this.cams.has(id)) this.cams.set(id, { id, waiters: [], lastSeen: 0 });
+    this.cams.get(id)!.lastSeen = this.now();
     return id;
+  }
+
+  /** Camera ids, for a snapshot (a restored camera is offline until its page checks in again). */
+  ids() {
+    return [...this.cams.keys()];
+  }
+  restore(id: string) {
+    if (!this.cams.has(id)) this.cams.set(id, { id, waiters: [], lastSeen: 0 });
   }
 
   has(id: string) {

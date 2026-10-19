@@ -61,6 +61,33 @@ export interface StackConfig {
   vision?: VisionAdapter;
   /** StoopStack outputs: run Settlement on DynamoDB, KMS, the Vault Lambda and Step Functions. */
   aws?: AwsWiring;
+  /** This world's own keys (address vault, approval tokens). Given back when it is restored. */
+  secrets?: WorldSecrets;
+  /** Receipt signing key (PEM), shared by every world on a server so old receipts stay verifiable. */
+  signingKeyPem?: string;
+  /** A snapshot taken by stack.snapshot() before a restart. */
+  restore?: WorldState;
+}
+
+export interface WorldSecrets {
+  vaultKey: string;
+  macKey: string;
+}
+/** Everything a hosted shop needs to come back after a restart (photo bytes are saved separately). */
+export interface WorldState {
+  v: 1;
+  store: Array<[string, string]>;
+  sellers: Array<[string, SellerActor]>;
+  buyers: Array<[string, BuyerActor]>;
+  otps: Array<[string, string]>;
+  prefs: Array<[string, unknown]>;
+  photos: Array<{ id: string; name: string; url: string; mime: string; hint?: string; bytes?: Uint8Array }>;
+  sweeps: Array<[string, string[]]>;
+  jobs: ScheduledJob[];
+  spent: Array<[string, number]>;
+  cams: string[];
+  camTokens: Array<[string, { cam: string; householdId: string }]>;
+  camOwner: Array<[string, string]>;
 }
 
 export const DEMO = {
@@ -76,7 +103,8 @@ export const DEMO = {
 export async function createStack(cfg: StackConfig) {
   const clock = cfg.clock ?? systemClock;
   const aws = cfg.aws ? awsSettlementDeps(cfg.aws) : undefined;
-  const store = aws?.store ?? new MemoryStore();
+  const memoryStore = new MemoryStore();
+  const store = aws?.store ?? memoryStore;
   const bus = new EventBus();
   // Locally a tick drives saga jobs; in AWS, Step Functions delivers them through SQS (startJobs below)
   const tickScheduler = new TickScheduler();
@@ -85,17 +113,22 @@ export async function createStack(cfg: StackConfig) {
   const psp = new SandboxPSP();
   const dataDir = join(cfg.rootDir, ".data");
   const signer =
-    aws?.signer ?? localSigner({ kid: "stoop-local-1", privateKeyPem: cfg.persistKeys ? loadOrCreateKey(join(dataDir, "receipt-signing-key.pem")) : undefined });
+    aws?.signer ?? localSigner({ kid: "stoop-local-1", privateKeyPem: cfg.signingKeyPem ?? (cfg.persistKeys ? loadOrCreateKey(join(dataDir, "receipt-signing-key.pem")) : undefined) });
+  const secrets: WorldSecrets = cfg.secrets ?? {
+    vaultKey: process.env.LOCAL_VAULT_KEY ?? randomBytes(32).toString("hex"),
+    macKey: process.env.LOCAL_TOKEN_MAC_KEY ?? randomBytes(32).toString("hex"),
+  };
+  const spent = memorySpentStore();
   const ringHmacKey = cfg.ringHmacKey ?? randomBytes(16).toString("hex");
   const simulatorKey = cfg.simulatorKey ?? "stoop-simulator-key-not-ring";
 
   const settlement = new Settlement({
     store,
     psp,
-    macp: aws?.macp ?? localHmacProvider(process.env.LOCAL_TOKEN_MAC_KEY ?? randomBytes(32)),
-    spent: aws?.spent ?? memorySpentStore(),
+    macp: aws?.macp ?? localHmacProvider(secrets.macKey),
+    spent: aws?.spent ?? spent,
     signer,
-    vault: aws?.vault ?? localVault(process.env.LOCAL_VAULT_KEY ?? randomBytes(32).toString("hex")),
+    vault: aws?.vault ?? localVault(secrets.vaultKey),
     boundary: aws?.boundary,
     clock,
     bus,
@@ -542,7 +575,9 @@ export async function createStack(cfg: StackConfig) {
   app.route("/sim", sim);
 
   // The web product: real sellers and buyers, pickup pass claims, the porch camera
-  app.route("/web", webRouter({ settlement, sellers, buyers, otps, porchcam, vision, bus, now: () => clock.now(), frame: (dealId, kind) => lastFrames.get(`${dealId}:${kind}`) }));
+  const camTokens = new Map<string, { cam: string; householdId: string }>();
+  const camOwner = new Map<string, string>();
+  app.route("/web", webRouter({ settlement, store, sellers, buyers, otps, porchcam, vision, bus, now: () => clock.now(), frame: (dealId, kind) => lastFrames.get(`${dealId}:${kind}`), camTokens, camOwner }));
 
   app.get("/api/config", (c) =>
     c.json({
@@ -568,6 +603,58 @@ export async function createStack(cfg: StackConfig) {
     }
   }
 
+  // ---------- restore a hosted shop saved before a restart
+  if (cfg.restore) {
+    const r = cfg.restore;
+    memoryStore.load(r.store);
+    for (const [k, v] of r.sellers) sellers.set(k, v);
+    for (const [k, v] of r.buyers) buyers.set(k, v);
+    for (const [k, v] of r.otps) otps.set(k, v);
+    prefs.load(r.prefs as Parameters<typeof prefs.load>[0]);
+    photos.load(r.photos, r.sweeps);
+    tickScheduler.restore(r.jobs);
+    spent.load(r.spent);
+    for (const id of r.cams) porchcam.restore(id);
+    for (const [k, v] of r.camTokens) camTokens.set(k, v);
+    for (const [k, v] of r.camOwner) camOwner.set(k, v);
+  }
+
+  /** A buyer arriving from a Stoop profile (their purchase code only as a hash). Returns their token here. */
+  const addBuyer = async (displayName: string, voiceCodeHash: string) => {
+    const id = `buyer_${randomBytes(6).toString("hex")}`;
+    const b = await settlement.createBuyer({ id, displayName, email: `${id}@buyers.stoop.invalid`, voiceCodeHash, walletToken: "tok_visa_4242" });
+    const token = `bk_${randomBytes(18).toString("base64url")}`;
+    buyers.set(token, { kind: "buyer", buyerId: b.id, displayName: b.displayName, token, walletToken: "tok_visa_4242" });
+    return token;
+  };
+
+  /** What a hosted shop saves to disk (photo bytes come from photos.all()). */
+  const snapshot = (): WorldState => ({
+    v: 1,
+    store: memoryStore.entries(),
+    sellers: [...sellers],
+    buyers: [...buyers],
+    otps: [...otps],
+    prefs: prefs.dump(),
+    photos: photos.all().map(({ bytes: _b, ...p }) => p),
+    sweeps: photos.sweepIds(),
+    jobs: tickScheduler.pending(),
+    spent: spent.dump(),
+    cams: porchcam.ids(),
+    camTokens: [...camTokens],
+    camOwner: [...camOwner],
+  });
+
+  /** After a restore: ask the porch camera again for any photo a pickup was waiting on when the server stopped. */
+  const resume = async () => {
+    for (const deal of await settlement.dealsInState(["WINDOW_OPEN", "STILL_THERE"])) {
+      const ev = await settlement.getEvidence(deal.id);
+      const hh = await settlement.householdPublic(deal.householdId);
+      if (!ev.before) bus.emit({ type: "frame_needed", at: clock.now(), dealId: deal.id, kind: "before", notBefore: clock.now(), deviceId: hh.ringDeviceId });
+      if ((await settlement.checkInAt(deal.id)) !== undefined && !ev.after) bus.emit({ type: "frame_needed", at: clock.now(), dealId: deal.id, kind: "after", notBefore: clock.now() + 15_000, deviceId: hh.ringDeviceId });
+    }
+  };
+
   let timer: NodeJS.Timeout | undefined;
   if (cfg.autoTick && !aws) timer = setInterval(() => void runDue(clock.now()), 1000);
 
@@ -587,6 +674,11 @@ export async function createStack(cfg: StackConfig) {
     simulatorKey,
     ringHmacKey,
     porchcam,
+    photos,
+    secrets,
+    snapshot,
+    resume,
+    addBuyer,
     tick: () => runDue(clock.now()),
     stop: () => {
       if (timer) clearInterval(timer);

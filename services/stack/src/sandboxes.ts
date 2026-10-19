@@ -12,16 +12,17 @@
 //   POST /api/feedback         tester feedback -> <dataDir>/feedback.jsonl
 //   POST /alexa                the Stoop Alexa skill's endpoint (Alexa Skills Kit; signed requests only)
 //   POST /api/alexa/pair       a 6-digit code that links a shop to someone's Alexa
-import { randomBytes } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { generateKeyPairSync, randomBytes } from "node:crypto";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { extname, join, normalize, sep } from "node:path";
 import { Hono, type Context } from "hono";
 import { modelCallsToday } from "@stoop/shared";
 import type { RequestEnvelope } from "ask-sdk-model";
 import { SkillRequestSignatureVerifier, TimestampVerifier } from "ask-sdk-express-adapter";
 import { AlexaLinks, createStoopSkill } from "./alexa.ts";
+import { Street, streetRouter, type StreetWorld } from "./street.ts";
 import { z } from "zod";
-import { createStack, type Stack, type StackConfig } from "./compose.ts";
+import { createStack, type Stack, type StackConfig, type WorldSecrets, type WorldState } from "./compose.ts";
 import { landingHtml, tourHtml, expiredHtml } from "./site.ts";
 
 export interface SandboxServerOptions {
@@ -43,12 +44,16 @@ export interface SandboxServerOptions {
   alexaSkillId?: string;
   /** Check Amazon's request signature and timestamp on /alexa (default on; tests turn it off). */
   alexaVerify?: boolean;
+  /** How often buyer agents look at the street (default 20 s). */
+  agentTickMs?: number;
   /** More origins every world accepts (local recordings that put each device on its own port). */
   extraOrigins?: string[];
   /** Stack overrides for every world (tests and local end-to-end runs, e.g. a stand-in vision model). */
   stackOverrides?: Partial<StackConfig>;
-  /** Where feedback.jsonl is written. */
+  /** Where feedback.jsonl is written (and, with persist, the shops). */
   dataDir: string;
+  /** Save every shop to <dataDir>/worlds/ and bring them back on start, so a redeploy closes nothing. */
+  persist?: boolean;
   /** Enables GET /api/feedback.jsonl?key=… */
   adminKey?: string;
   now?: () => number;
@@ -60,6 +65,14 @@ interface World {
   stack: Stack;
   createdAt: number;
   lastSeen: number;
+  /** The origin it was opened from: its links (photos, pass) are built on it. */
+  origin: string;
+}
+
+interface SavedWorld {
+  meta: { id: string; origin: string; createdAt: number; lastSeen: number };
+  secrets: WorldSecrets;
+  state: WorldState;
 }
 
 /** Built app per URL segment of a demo world, and its dist folder. */
@@ -95,6 +108,14 @@ const Feedback = z.object({
   consent: z.boolean().optional(),
   step: z.number().int().min(0).max(10).optional(),
 });
+
+function loadOrCreateKey(path: string): string {
+  if (existsSync(path)) return readFileSync(path, "utf8");
+  const pem = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "pem", type: "pkcs8" }) as string;
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, pem, { mode: 0o600 });
+  return pem;
+}
 
 export async function createSandboxServer(o: SandboxServerOptions) {
   const now = o.now ?? (() => Date.now());
@@ -133,18 +154,132 @@ export async function createSandboxServer(o: SandboxServerOptions) {
     return html.replace("<head>", `<head><script>window.__STOOP__=${JSON.stringify(cfg)}</script>`);
   };
   const hasVideo = existsSync(join(o.rootDir, "apps", "web", "dist", "demo.mp4"));
-  const webApp = (c: Context) => {
-    const html = inject("web", { deviceDemo: !!o.deviceDemo, video: hasVideo, alexaSkill: !!o.alexaSkillId });
-    return html ? c.html(html) : c.text("Web app not built. Run pnpm build:web.", 503);
+  const webApp = async (c: Context) => {
+    let html = inject("web", { deviceDemo: !!o.deviceDemo, video: hasVideo, alexaSkill: !!o.alexaSkillId });
+    if (!html) return c.text("Web app not built. Run pnpm build:web.", 503);
+    // a shared listing link previews as the item (photo, title, price) in chats and social apps
+    const m = /^\/shop\/([A-Za-z0-9_-]+)\/item\/([A-Za-z0-9_-]+)\/?$/.exec(c.req.path);
+    const w = m ? worlds.get(m[1]!) : undefined;
+    if (m && w?.kind === "shop") {
+      const l = await w.stack.settlement.getListing(m[2]!).catch(() => undefined);
+      if (l && ["LIVE", "RESERVED"].includes(l.state)) {
+        const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
+        const price = `$${(l.askMinor / 100).toFixed(l.askMinor % 100 ? 2 : 0)}`;
+        const title = esc(`${l.title} · ${price}`);
+        const desc = esc(`Porch pickup in ${l.zip}. Pay on Stoop; you’re only charged once the pickup is verified.`);
+        const tags = [
+          `<meta property="og:type" content="product">`,
+          `<meta property="og:site_name" content="Stoop">`,
+          `<meta property="og:title" content="${title}">`,
+          `<meta property="og:description" content="${desc}">`,
+          `<meta property="og:url" content="${esc(originOf(c) + c.req.path)}">`,
+          ...(l.photoUrls[0] ? [`<meta property="og:image" content="${esc(l.photoUrls[0])}">`, `<meta name="twitter:card" content="summary_large_image">`] : []),
+          `<meta property="product:price:amount" content="${(l.askMinor / 100).toFixed(2)}">`,
+          `<meta property="product:price:currency" content="USD">`,
+        ].join("");
+        html = html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`).replace("</head>", `${tags}</head>`);
+      }
+    }
+    return c.html(html);
   };
 
-  const stopWorld = (w: World) => {
+  // ---------- shops survive restarts: a snapshot per shop under <dataDir>/worlds/<id>/
+  const worldsDir = join(o.dataDir, "worlds");
+  const signingKeyPem = o.persist ? loadOrCreateKey(join(o.dataDir, "receipt-signing-key.pem")) : undefined;
+  const lastSaved = new Map<string, string>();
+  const savedPhotos = new Map<string, Set<string>>();
+  const shopStack = (id: string, origin: string, extra: Partial<StackConfig> = {}) =>
+    createStack({
+      publicBaseUrl: `${origin}/s/${id}`,
+      passBaseUrl: `${origin}/shop/${id}`,
+      allowedOrigins: [origin, ...(o.extraOrigins ?? [])],
+      rootDir: o.rootDir,
+      seedDemo: false,
+      frameSource: "porchcam",
+      autoTick: true,
+      immediateWindow: true,
+      frameDelayScale: 1,
+      signingKeyPem,
+      ...o.stackOverrides,
+      ...extra,
+    });
+  const saveWorld = (w: World) => {
+    if (!o.persist || w.kind !== "shop") return;
+    const dir = join(worldsDir, w.id);
+    mkdirSync(join(dir, "photos"), { recursive: true });
+    const known = savedPhotos.get(w.id) ?? new Set(readdirSync(join(dir, "photos")));
+    for (const p of w.stack.photos.all()) {
+      if (!p.bytes || known.has(p.id)) continue;
+      writeFileSync(join(dir, "photos", p.id), Buffer.from(p.bytes));
+      known.add(p.id);
+    }
+    savedPhotos.set(w.id, known);
+    const saved: SavedWorld = { meta: { id: w.id, origin: w.origin, createdAt: w.createdAt, lastSeen: w.lastSeen }, secrets: w.stack.secrets, state: w.stack.snapshot() };
+    const json = JSON.stringify(saved);
+    if (lastSaved.get(w.id) === json) return;
+    writeFileSync(join(dir, "state.json.tmp"), json, { mode: 0o600 });
+    renameSync(join(dir, "state.json.tmp"), join(dir, "state.json"));
+    lastSaved.set(w.id, json);
+  };
+  const saveAll = () => {
+    for (const w of worlds.values()) {
+      try {
+        saveWorld(w);
+      } catch (e) {
+        console.error(`could not save shop ${w.id}: ${String(e)}`);
+      }
+    }
+  };
+  const forget = (id: string) => {
+    rmSync(join(worldsDir, id), { recursive: true, force: true });
+    lastSaved.delete(id);
+    savedPhotos.delete(id);
+  };
+  if (o.persist && existsSync(worldsDir)) {
+    for (const id of readdirSync(worldsDir)) {
+      try {
+        const s = JSON.parse(readFileSync(join(worldsDir, id, "state.json"), "utf8")) as SavedWorld;
+        if (now() - s.meta.lastSeen > shopIdleMs) {
+          forget(id);
+          continue;
+        }
+        const photos = s.state.photos.map((p) => {
+          const f = join(worldsDir, id, "photos", p.id);
+          return existsSync(f) ? { ...p, bytes: new Uint8Array(readFileSync(f)) } : p;
+        });
+        const stack = await shopStack(id, s.meta.origin, { secrets: s.secrets, restore: { ...s.state, photos } });
+        worlds.set(id, { id, kind: "shop", stack, createdAt: s.meta.createdAt, lastSeen: s.meta.lastSeen, origin: s.meta.origin });
+        await stack.resume();
+      } catch (e) {
+        console.error(`could not restore shop ${id}: ${String(e)}`);
+      }
+    }
+  }
+  // ---------- Stoop Street: the marketplace across shops, buyer profiles and buyer agents
+  const links = new AlexaLinks(join(o.dataDir, "alexa-links.json"), now);
+  const street = new Street({
+    worlds: worlds as unknown as Map<string, StreetWorld>,
+    now,
+    file: o.persist ? join(o.dataDir, "street.json") : undefined,
+    pairAlexa: o.alexaSkillId ? (id, name) => links.newBuyerCode(id, name) : undefined,
+  });
+  const agents = setInterval(() => void street.tick().catch(() => undefined), o.agentTickMs ?? 20_000);
+  agents.unref?.();
+
+  const saver = setInterval(() => {
+    saveAll();
+    if (o.persist) street.save();
+  }, 15_000);
+  saver.unref?.();
+
+  const stopWorld = (w: World, closing = false) => {
     w.stack.stop();
     worlds.delete(w.id);
+    if (closing && w.kind === "shop") forget(w.id);
   };
   const sweep = () => {
     const t = now();
-    for (const w of worlds.values()) if (t - w.lastSeen > (w.kind === "shop" ? shopIdleMs : idleMs)) stopWorld(w);
+    for (const w of worlds.values()) if (t - w.lastSeen > (w.kind === "shop" ? shopIdleMs : idleMs)) stopWorld(w, true);
   };
   const sweeper = setInterval(sweep, 60_000);
   sweeper.unref?.();
@@ -157,6 +292,8 @@ export async function createSandboxServer(o: SandboxServerOptions) {
   // ---------- the web app (client-side routes)
   app.get("/", webApp);
   app.get("/sell", webApp);
+  app.get("/street", webApp);
+  app.get("/me", webApp);
   app.get("/shop/:id", webApp);
   app.get("/shop/:id/*", webApp);
 
@@ -169,18 +306,7 @@ export async function createSandboxServer(o: SandboxServerOptions) {
     if (count("shop") >= maxShops) return c.json({ error: "full", message: "Stoop is at capacity for this test. Try again tomorrow." }, 503);
     const id = randomBytes(6).toString("base64url");
     const origin = originOf(c);
-    const stack = await createStack({
-      publicBaseUrl: `${origin}/s/${id}`,
-      passBaseUrl: `${origin}/shop/${id}`,
-      allowedOrigins: [origin, ...(o.extraOrigins ?? [])],
-      rootDir: o.rootDir,
-      seedDemo: false,
-      frameSource: "porchcam",
-      autoTick: true,
-      immediateWindow: true,
-      frameDelayScale: 1,
-      ...o.stackOverrides,
-    });
+    const stack = await shopStack(id, origin);
     const res = await stack.app.fetch(new Request(`${origin}/web/shop`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) }));
     const out = (await res.json()) as { sellerToken?: string; fields?: string[] };
     if (!res.ok || !out.sellerToken) {
@@ -188,8 +314,14 @@ export async function createSandboxServer(o: SandboxServerOptions) {
       return c.json({ error: "invalid", fields: out.fields ?? [] }, 400);
     }
     const t = now();
-    worlds.set(id, { id, kind: "shop", stack, createdAt: t, lastSeen: t });
+    const w: World = { id, kind: "shop", stack, createdAt: t, lastSeen: t, origin };
+    worlds.set(id, w);
     record(key);
+    try {
+      saveWorld(w);
+    } catch {
+      /* the next save round retries */
+    }
     return c.json({ id, sellerToken: out.sellerToken, url: `/shop/${id}` });
   });
 
@@ -220,13 +352,25 @@ export async function createSandboxServer(o: SandboxServerOptions) {
       ...o.stackOverrides,
     });
     const t = now();
-    worlds.set(id, { id, kind: "demo", stack, createdAt: t, lastSeen: t });
+    worlds.set(id, { id, kind: "demo", stack, createdAt: t, lastSeen: t, origin });
     record(key);
     return c.json({ id, tour: `/s/${id}/` });
   });
 
+  app.route(
+    "/api",
+    streetRouter(street, {
+      worlds: worlds as unknown as Map<string, StreetWorld>,
+      allow: (k, l) => {
+        if (!under(k, l)) return false;
+        record(k);
+        return true;
+      },
+      ipOf,
+    }),
+  );
+
   // ---------- the Stoop skill on a real Alexa
-  const links = new AlexaLinks(join(o.dataDir, "alexa-links.json"), now);
   const skill = createStoopSkill({
     skillId: o.alexaSkillId,
     links,
@@ -348,8 +492,15 @@ export async function createSandboxServer(o: SandboxServerOptions) {
     app,
     worlds,
     sweep,
+    /** Save every shop now (also runs every 15 s and on stop). */
+    save: saveAll,
+    street,
     stop() {
       clearInterval(sweeper);
+      clearInterval(saver);
+      clearInterval(agents);
+      saveAll();
+      if (o.persist) street.save();
       for (const w of [...worlds.values()]) stopWorld(w);
     },
   };

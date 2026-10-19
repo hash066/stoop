@@ -117,6 +117,14 @@ describe("real two-device flow with a porch camera (no demo data)", () => {
       expect(deal.verdict).toBe("VERIFIED");
       expect(deal.receiptIds).toHaveLength(1);
 
+      // the buyer reviews the pickup; the review carries the signed receipt (a verified pickup, provable)
+      expect((await http(stack, "POST", "/web/review", { dealId, rating: 5, text: "Easy pickup" }, { Authorization: `Bearer ${seller}` })).status).toBe(401);
+      const rev = await http(stack, "POST", "/web/review", { dealId, rating: 5, text: "Easy pickup" }, { Authorization: `Bearer ${buyer}` });
+      expect(rev.status).toBe(200);
+      expect(rev.json.review).toMatchObject({ rating: 5, verified: true, receiptId: deal.receiptIds[0], by: "Ben" });
+      expect((await http(stack, "POST", "/web/review", { dealId, rating: 1 }, { Authorization: `Bearer ${buyer}` })).status).toBe(409);
+      expect((await http(stack, "GET", "/web/storefront")).json.rating).toMatchObject({ avg: 5, count: 1, verified: 1 });
+
       // the seller's dashboard shows the whole path and the porch photos; buyers never get the photos
       const sale = (await http(stack, "GET", "/web/seller/state", undefined, { Authorization: `Bearer ${seller}` })).json.sales[0];
       expect(sale).toMatchObject({ dealId, verdict: "VERIFIED", before: { presence: "present" }, after: { presence: "absent" }, presenceEvents: 1, payoutMinor: 95_00 - 4_75 });

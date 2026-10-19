@@ -28,7 +28,7 @@ export function localHmacProvider(key: string | Buffer): MacProvider {
   };
 }
 
-export function memorySpentStore(): SpentTokenStore & { size(): number } {
+export function memorySpentStore(): SpentTokenStore & { size(): number; dump(): Array<[string, number]>; load(e: Array<[string, number]>): void } {
   const used = new Map<string, number>();
   return {
     async markUsed(tid, expiresAt) {
@@ -37,6 +37,8 @@ export function memorySpentStore(): SpentTokenStore & { size(): number } {
       return true;
     },
     size: () => used.size,
+    dump: () => [...used],
+    load: (e) => e.forEach(([k, v]) => used.set(k, v)),
   };
 }
 

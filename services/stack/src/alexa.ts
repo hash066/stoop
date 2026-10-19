@@ -8,6 +8,7 @@ import { randomInt } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import * as Alexa from "ask-sdk-core";
 import type { RequestEnvelope, ResponseEnvelope } from "ask-sdk-model";
+import { mcpCall, type ToolOut } from "./inproc.ts";
 
 /** What the skill needs from a shop: its world's HTTP app, and whose shop a seller token opens. */
 export interface ShopHandle {
@@ -15,15 +16,12 @@ export interface ShopHandle {
   shopName(token: string): Promise<string | undefined>;
 }
 
-interface Link {
-  shop: string;
-  token: string;
-  name: string;
-}
+/** A seller's shop, or a buyer's Stoop profile (voice shopping across the street). */
+export type Link = { kind?: "seller"; shop: string; token: string; name: string } | { kind: "buyer"; profileId: string; name: string };
 
-/** Pairing codes (10 minutes, single use) and which Alexa account is linked to which shop. */
+/** Pairing codes (10 minutes, single use) and which Alexa account is linked to which shop or buyer. */
 export class AlexaLinks {
-  private codes = new Map<string, { shop: string; token: string; name: string; exp: number }>();
+  private codes = new Map<string, Link & { exp: number }>();
   private users = new Map<string, Link>();
   constructor(
     private file?: string,
@@ -38,22 +36,28 @@ export class AlexaLinks {
     }
   }
   newCode(shop: string, token: string, name: string): string {
+    return this.issue({ kind: "seller", shop, token, name });
+  }
+  newBuyerCode(profileId: string, name: string): string {
+    return this.issue({ kind: "buyer", profileId, name });
+  }
+  private issue(link: Link): string {
     const t = this.now();
-    for (const [c, v] of this.codes) if (v.exp < t || (v.shop === shop && v.token === token)) this.codes.delete(c);
+    for (const [c, v] of this.codes) if (v.exp < t || JSON.stringify({ ...v, exp: 0 }) === JSON.stringify({ ...link, exp: 0 })) this.codes.delete(c);
     let code: string;
     do code = String(randomInt(100000, 1000000));
     while (this.codes.has(code));
-    this.codes.set(code, { shop, token, name, exp: t + 10 * 60_000 });
+    this.codes.set(code, { ...link, exp: t + 10 * 60_000 });
     return code;
   }
   redeem(code: string, userId: string): Link | undefined {
     const c = this.codes.get(code);
     if (!c || c.exp < this.now()) return undefined;
     this.codes.delete(code);
-    const link = { shop: c.shop, token: c.token, name: c.name };
-    this.users.set(userId, link);
+    const { exp: _e, ...link } = c;
+    this.users.set(userId, link as Link);
     this.save();
-    return link;
+    return link as Link;
   }
   get(userId: string) {
     return this.users.get(userId);
@@ -67,32 +71,8 @@ export class AlexaLinks {
   }
 }
 
-interface ToolOut {
-  text: string;
-  data: Record<string, any>;
-  isError: boolean;
-}
-
-/** One stateless MCP call into the shop, like an Alexa+ client without a session. */
-async function callTool(h: ShopHandle, token: string, name: string, args: Record<string, unknown> = {}): Promise<ToolOut> {
-  const res = await h.fetch(
-    new Request("http://stoop.internal/mcp/seller", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", Authorization: `Bearer ${token}`, "MCP-Protocol-Version": "2025-11-25" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: name === "tools/list" ? "tools/list" : "tools/call", params: name === "tools/list" ? {} : { name, arguments: args } }),
-    }),
-  );
-  const raw = await res.text();
-  const json = raw.trimStart().startsWith("{") ? raw : (raw.split("\n").find((l) => l.startsWith("data:")) ?? "data:{}").slice(5);
-  const msg = JSON.parse(json) as { result?: { content?: Array<{ type: string; text?: string }>; structuredContent?: Record<string, any>; isError?: boolean; tools?: unknown[] }; error?: { message: string } };
-  if (msg.error) throw new Error(msg.error.message);
-  if (name === "tools/list") return { text: "", data: { tools: msg.result?.tools ?? [] }, isError: false };
-  return {
-    text: (msg.result?.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join(" "),
-    data: msg.result?.structuredContent ?? {},
-    isError: !!msg.result?.isError,
-  };
-}
+/** One stateless MCP call into the shop as its seller, like an Alexa+ client without a session. */
+const callTool = (h: ShopHandle, token: string, name: string, args: Record<string, unknown> = {}) => mcpCall(h.fetch, "seller", token, name, args);
 
 const SELLER_TOOLS = new Set(["my_items", "list_items", "set_mandate", "review_offers", "respond_to_offer", "set_pickup_preferences", "handoff_status", "get_receipt", "confirm_pickup", "cancel_sale", "confirm_action"]);
 const LINK_FIRST = "To connect your shop, open it on the Stoop website, tap Connect Alexa, and tell me the six digit code.";
@@ -112,9 +92,10 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
   };
 
   /** The linked shop, or a spoken explanation of what to do instead. */
-  const linked = (h: Input): { link: Link; handle: ShopHandle } | { say: string } => {
+  const linked = (h: Input): { link: Extract<Link, { shop: string }>; handle: ShopHandle } | { say: string } => {
     const link = o.links.get(userId(h));
     if (!link) return { say: LINK_FIRST };
+    if (link.kind === "buyer") return { say: "This Alexa is set up for shopping. Try: find me a jogging stroller under a hundred dollars." };
     const handle = o.shop(link.shop);
     if (!handle) {
       o.links.unlink(userId(h));

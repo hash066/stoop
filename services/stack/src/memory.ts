@@ -28,6 +28,18 @@ export class LocalPhotoStore implements PhotoStore {
   async lastSweep(householdId: string) {
     return this.sweeps.get(householdId) ?? [];
   }
+
+  /** For a snapshot: every photo (with bytes, saved once each by the caller) and the latest sweeps. */
+  all() {
+    return [...this.byId.values()];
+  }
+  sweepIds(): Array<[string, string[]]> {
+    return [...this.sweeps].map(([h, ps]) => [h, ps.map((p) => p.id)]);
+  }
+  load(photos: SweepPhoto[], sweeps: Array<[string, string[]]>) {
+    for (const p of photos) this.byId.set(p.id, p);
+    for (const [h, ids] of sweeps) this.sweeps.set(h, ids.map((id) => this.byId.get(id)).filter((p): p is SweepPhoto => !!p));
+  }
 }
 
 /** Seller preferences. Addresses are never stored here (redaction filter, rule R2). */
@@ -41,5 +53,11 @@ export class LocalPreferenceMemory implements PreferenceMemory {
     let label = p.label;
     for (const r of this.redactions()) if (r && label.includes(r)) label = label.replaceAll(r, "[redacted]");
     this.prefs.set(householdId, { ...p, label });
+  }
+  dump(): Array<[string, PickupPrefs]> {
+    return [...this.prefs];
+  }
+  load(e: Array<[string, PickupPrefs]>) {
+    for (const [k, v] of e) this.prefs.set(k, v);
   }
 }

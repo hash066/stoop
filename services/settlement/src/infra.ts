@@ -87,6 +87,14 @@ export class MemoryStore implements Store {
   async delete(key: string) {
     this.data.delete(key);
   }
+
+  /** Raw contents, for a snapshot on disk (hosted shops survive restarts). */
+  entries(): Array<[string, string]> {
+    return [...this.data];
+  }
+  load(entries: Array<[string, string]>) {
+    for (const [k, v] of entries) this.data.set(k, v);
+  }
 }
 
 // ---------- vault ----------
@@ -182,6 +190,10 @@ export class TickScheduler implements Scheduler {
   }
   pending() {
     return [...this.jobs].sort((a, b) => a.at - b.at);
+  }
+  /** Put back jobs saved before a restart (they keep their ids and times). */
+  restore(jobs: ScheduledJob[]) {
+    for (const j of jobs) if (!this.jobs.some((x) => x.id === j.id)) this.jobs.push(j);
   }
   async runDue(now: number): Promise<number> {
     const due = this.jobs.filter((j) => j.at <= now).sort((a, b) => a.at - b.at);

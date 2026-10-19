@@ -89,6 +89,8 @@ export interface SettlementDeps {
 }
 
 const hashSecret = (s: string) => createHash("sha256").update(`stoop:${s}`).digest("hex");
+/** How a purchase code is stored (a buyer profile keeps only this, never the code). */
+export const purchaseCodeHash = hashSecret;
 
 export class Settlement {
   private readonly boundary: AddressBoundary;
@@ -182,15 +184,15 @@ export class Settlement {
     await this.d.store.put(K.household(h.id), h);
   }
 
-  async createBuyer(input: { displayName: string; email: string; voiceCode: string; walletToken: string; id?: string }): Promise<Buyer> {
-    if (!/^\d{4}$/.test(input.voiceCode)) throw new SettlementError("voice_code_must_be_4_digits");
+  async createBuyer(input: { displayName: string; email: string; voiceCode?: string; voiceCodeHash?: string; walletToken: string; id?: string }): Promise<Buyer> {
+    if (!input.voiceCodeHash && !/^\d{4}$/.test(input.voiceCode ?? "")) throw new SettlementError("voice_code_must_be_4_digits");
     const b: Buyer = {
       id: input.id ?? newId("buyer"),
       displayName: input.displayName,
       // Letter + digit, so it never sounds like a price ("Buyer 95 offers $95").
       pseudonym: `Buyer ${"ABCDEFGHJKLMNPQRSTUVWXYZ"[randomInt(0, 24)]}${randomInt(2, 10)}`,
       email: input.email,
-      voiceCodeHash: hashSecret(input.voiceCode),
+      voiceCodeHash: input.voiceCodeHash ?? hashSecret(input.voiceCode!),
       walletToken: input.walletToken,
       verifiedPickups: 0,
       noShows: 0,
@@ -685,6 +687,10 @@ export class Settlement {
     const next = { ...deal, ...patch, version: deal.version + 1, updatedAt: this.now() };
     if (!(await this.d.store.put(K.deal(deal.id), next, { ifVersion: deal.version }))) throw new SettlementError("conflict", "Deal changed", 409);
     return next;
+  }
+
+  async dealsInState(states: DealState[]): Promise<Deal[]> {
+    return (await this.d.store.list<Deal>("deal#")).filter((d) => states.includes(d.state));
   }
 
   async dealsForHousehold(householdId: string) {
