@@ -1,5 +1,0 @@
-{
-  "StoopAgentStack": {
-    "NegotiatorRuntimeArn": "arn:aws:bedrock-agentcore:us-east-1:428516841578:runtime/stoop_negotiator-e2dr9EHj7e"
-  }
-}
