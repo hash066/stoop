@@ -111,7 +111,11 @@
 - `LLM_MODE` unset = offline (ScriptedModel + templates); `LLM_MODE=bedrock` = live Bedrock (Nova 2 Lite).
 - Demo tokens: seller `seller-demo-okafor`; buyers `buyer-demo-dana` (purchase code 4821) and `buyer-demo-lee`. Local demo values in `services/stack/src/compose.ts` (`DEMO`), not real credentials.
 
-## 5. Current state (verified Oct 17, 22:30 IST)
+## 5. Current state (verified Oct 19; the web app row is the newest)
+
+- **The tester product is the web app** (`apps/web`, served at the site root): real shops (seller's own address, encrypted), photos priced by Bedrock (AI estimates labelled), a private lowest price, share links, a buyer on another device who messages the seller's assistant, pays (held, never charged), opens a phone-bound pickup pass and taps I'm Here, and a **phone or laptop as the porch camera** (before/after photos, person counts from Bedrock vision). The Alexa+ device tour is at `/demo`, linked only on the judge site.
+- Verified: `pnpm --filter @stoop/stack e2e` (three Chrome profiles: seller 1440 px, buyer phone, camera phone) ends CLOSED locally; with `-- --target https://d29kyjvj1jibpu.cloudfront.net` it ends CLOSED on the live site with real Bedrock (both-confirm path, because Chrome's fake camera shows no item).
+- **Shops live in memory: a redeploy closes every open shop.** Batch fixes; don't deploy while testers are mid-sale.
 
 - **Public repo:** https://github.com/hash066/stoop (MIT). CI (`.github/workflows/ci.yml`) is green on every push: typecheck, all tests, offline evals, the OSS helper tests.
 - `pnpm typecheck` is clean and the suite is **211 tests**: receipts 6, policy 86, ring-bridge 9, settlement + UCP + AWS adapters 52, verifier 6, ring-sim 3, agents 24, MCP end-to-end + hosted mode + design rules 25.
@@ -130,7 +134,8 @@
 | Devpost draft | `docs/SUBMISSION.md` | Drafted; TODOs listed at the top |
 | **Hosted mode** (Oct 18) | `services/stack/src/{sandboxes,site,serve}.ts`, `Dockerfile` | Landing + guided tour + private sandbox per visitor + feedback survey. `pnpm tour` passes in 44 s (also from a fresh clone with the image's exact commands). Not online yet: see `docs/DEPLOY.md` |
 | Alexa+ design rules test | `services/stack/test/design-rules.test.ts` | 33 spoken lines: ≤75 words (longest 56), ≤5 options, no ids/JSON/URLs |
-| AWS host stack | `infra/lib/host-stack.ts` (`StoopHostStack`) | **Deployed Oct 19.** Tester site https://d29kyjvj1jibpu.cloudfront.net (offline), judge site https://d2h8mmod981k0j.cloudfront.net (Bedrock, 2000 calls/day cap). Instance i-0aa13f2eaf63c246d; update with SSM (`docs/DEPLOY.md`). $30 budget `stoop-cap-30usd` with stop-instance + deny-Bedrock actions armed |
+| **Web app** (Oct 19) | `apps/web`, `services/stack/src/{web,porchcam,sandboxes}.ts`, `services/stack/e2e/real-flow.ts` | Live on both sites. Server tests: `e2e.real.test.ts`, `sandboxes.test.ts` |
+| AWS host stack | `infra/lib/host-stack.ts` (`StoopHostStack`) | **Deployed Oct 19.** Tester site https://d29kyjvj1jibpu.cloudfront.net (Bedrock, 1500 calls/day, 80 shops), judge site https://d2h8mmod981k0j.cloudfront.net (Bedrock, 1000 calls/day, 40 shops, `/demo` linked). Instance i-0aa13f2eaf63c246d; update with SSM (`docs/DEPLOY.md`). $30 budget `stoop-cap-30usd` with stop-instance + deny-Bedrock actions armed |
 | OSS: Ring starter media helpers | `oss/ring-api-helloworld` | **PR open:** AmazonAppDev/ring-api-helloworld#36 (issue #35) |
 | OSS: `proof-of-handoff` (renamed from `@stoop/…`) | `packages/proof-of-handoff` | Publish-ready (tarball tested in a clean dir); **the user publishes** |
 | Fire TV Garage Mode | `apps/firetv` | Web target works; Android TV emulator deferred (user decides later) |
@@ -145,7 +150,8 @@
 4. ~~Wire the stack to AWS~~ **Done:** `STOOP_AWS_OUTPUTS=infra/outputs.json pnpm stack` runs Settlement on DynamoDB, KMS, the Vault Lambda and Step Functions → SQS (`awsSettlementDeps` in `services/settlement/src/aws/wiring.ts`); Ops shows a "settlement: AWS" chip. Unit-tested; first real run happens after the deploy.
 
 ### P1: blocked on the user (ask; never work around it)
-- **Testers by Monday (the user's goal):** deploy `StoopHostStack` first (`docs/DEPLOY.md`), run `pnpm tour <PublicUrl> <key>`, then the user sends `docs/TESTERS.md`'s message. If AWS is still blocked, offer the Render fallback in DEPLOY.md (the user chose "wait for AWS" on Oct 18; re-ask before switching).
+- **Testers:** the user does one real two-phone run on the tester site, then sends `docs/TESTERS.md`'s message (pairs: a seller plus a friend as buyer).
+- **Photos for the landing page** (taste rules want real imagery): 4 of the user's own photos (an item on a porch or stoop, a close-up of an item, someone picking something up, an old phone propped at a window).
 - ~~AWS activation~~ **Done Oct 19**: both stacks deployed and verified (see §5).
 - **Hosting in us-east-1** (EC2 + CloudFront, or AgentCore for the agents) once EC2 activates. Then the Negotiator on AgentCore Runtime with tools calling Settlement over HTTP, AgentCore Observability screenshots, and a judge URL in the README.
 - **npm:** the user runs `npm login`, then `pnpm --filter proof-of-handoff publish --no-git-checks` (the `prepack` builds `dist/`). Afterwards add the npm link to README and SUBMISSION.
