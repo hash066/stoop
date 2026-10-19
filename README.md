@@ -1,8 +1,10 @@
 # Stoop
 
-**Sell anything without meeting anyone. Money moves only when your doorbell sees it go.**
+**Sell anything without meeting anyone. Money moves only when your porch camera sees it go.**
 
-**Try it (3 minutes, private sandbox, no sign-up): https://d29kyjvj1jibpu.cloudfront.net**
+**Try it: https://d29kyjvj1jibpu.cloudfront.net** Open a shop, photograph something you'd sell, send the link to a friend, and use an old phone or a laptop as the porch camera. No sign-up; test payments only, nothing is ever charged.
+
+**Judges:** the same app plus the Alexa+ device demo (seller and buyer side by side) at https://d2h8mmod981k0j.cloudfront.net/demo
 
 Stoop is an **Alexa+ add-on** (MCP server + MCP Apps cards) and a **Ring Appstore app**.
 
@@ -36,12 +38,20 @@ Follow [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) for the 3-minute flow. Every
 
 ### Hosted mode: what testers and judges get
 
-One server with a landing page, a guided 7-step tour, and a private sandbox per visitor (nobody sees anyone else's sales). The tour's chips speak on the right simulated device, the doorbell plays the pickup, and a 4-question survey closes it.
+**The Stoop web app** (`apps/web`) is the product with no simulation in the flow:
+
+- **Seller:** opens a shop with their real pickup address (encrypted; buyers see it only on their pass, during their window) and uploads photos. Bedrock names and prices each one; an AI estimate is labelled as one. They list with a private lowest price and share the link.
+- **Buyer:** on another device, asks and haggles with the seller's assistant (typed or spoken, through the same MCP tools and planner an Alexa+ device uses). They pay (held, not charged) and open the pickup pass on their phone.
+- **Porch camera:** any phone or laptop running the camera page. It takes the before and after photos, and during a pickup its motion detector asks Bedrock vision whether a person is at the door (counted, never identified).
+- **Handoff:** the buyer taps I'm Here, the camera sees someone and then the item gone, and the money moves with a signed receipt. If the camera can't tell, both people confirm.
+
+Each shop is its own private world. The Alexa+ device tour (seeded demo household, labelled simulator) lives at `/demo`.
 
 ```bash
 pnpm build:web
-PORT=8080 ADMIN_KEY=local pnpm serve       # http://localhost:8080
-pnpm tour http://localhost:8080 local      # drives the whole tour in Chrome
+PORT=8080 ADMIN_KEY=local pnpm serve       # http://localhost:8080 (web app), /demo (device tour)
+pnpm --filter @stoop/stack e2e             # seller, buyer phone and camera phone in three Chrome profiles, end to end
+pnpm tour http://localhost:8080 local      # drives the device tour in Chrome
 ```
 
 Docker image: `Dockerfile`. AWS deployment (CloudFront + one instance, a public site with offline agents and a judge site on Bedrock): [`docs/DEPLOY.md`](docs/DEPLOY.md).
@@ -52,6 +62,7 @@ Docker image: `Dockerfile`. AWS deployment (CloudFront + one instance, a public 
 |---|---|
 | MCP servers (spec 2025-11-25, Streamable HTTP, sessions, form + URL elicitation, structured output, MCP Apps) | The Alexa+ client: add-on tooling is partner-only, so we built a device simulator that is a **real MCP client and MCP Apps host** |
 | UCP checkout endpoints matching the Alexa+ add-on contract (2026-04-08) | Payment processor: `SandboxPSP` with Stripe manual-capture semantics ("Test PSP") |
+| The web app's porch camera: a real phone or laptop camera, Bedrock vision for item-there/item-gone and person counts (origin `porchcam` on every frame and receipt) | |
 | Ring Partner API client (snapshots, clips, WHEP live view), HMAC webhook ingest. Checked against the Ring API with a Developer Playground token (Oct 18): auth and device listing work; image download needs a device that has recordings | Ring events from our signed simulator (the Playground doesn't deliver webhooks; a judge confirmed own simulators are fine), plus our own labelled porch footage |
 | Strands agents, the Policy Kernel, KMS-style tokens and ES256 receipts | Offline `ScriptedModel` and footage-label vision until Bedrock access is active |
 

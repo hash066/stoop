@@ -3,6 +3,10 @@
 // through once the camera sees the item gone. Three separate browser profiles, one hosted server.
 //
 //   pnpm --filter @stoop/stack e2e [-- --headed] [-- --shots <dir>]
+//   pnpm --filter @stoop/stack e2e -- --target https://<site>   (the live site, real Bedrock)
+//
+// Against a live site the vision model is real and the camera is Chrome's test pattern, which shows
+// no item: the camera can't confirm the pickup, so the run takes the both-people-confirm path.
 //
 // The server is the real hosted server (sandboxes.ts). Two stand-ins, both labelled here: the vision
 // model (this script decides what the "camera" sees, so the run doesn't need Bedrock) and Chrome's
@@ -24,8 +28,9 @@ const args = process.argv.slice(2);
 const headed = args.includes("--headed");
 const shots = args.includes("--shots") ? resolve(args[args.indexOf("--shots") + 1]!) : mkdtempSync(join(tmpdir(), "stoop-e2e-"));
 mkdirSync(shots, { recursive: true });
+const target = args.includes("--target") ? args[args.indexOf("--target") + 1]!.replace(/\/$/, "") : undefined;
 const PORT = Number(process.env.E2E_PORT ?? 8797);
-const BASE = `http://localhost:${PORT}`;
+const BASE = target ?? `http://localhost:${PORT}`;
 
 // What the stand-in vision model "sees" on the porch right now
 const scene = { item: "present" as "present" | "absent", person: 0 };
@@ -36,12 +41,14 @@ const vision: VisionAdapter = {
   },
 };
 
-const server = await createSandboxServer({
-  rootDir: root,
-  dataDir: mkdtempSync(join(tmpdir(), "stoop-e2e-data-")),
-  stackOverrides: { vision, recallChecker: rulesOnlyChecker(), frameDelayScale: 0.2 },
-});
-const http = serve({ fetch: server.app.fetch, port: PORT, hostname: "127.0.0.1" });
+const server = target
+  ? undefined
+  : await createSandboxServer({
+      rootDir: root,
+      dataDir: mkdtempSync(join(tmpdir(), "stoop-e2e-data-")),
+      stackOverrides: { vision, recallChecker: rulesOnlyChecker(), frameDelayScale: 0.2 },
+    });
+const http = server ? serve({ fetch: server.app.fetch, port: PORT, hostname: "127.0.0.1" }) : undefined;
 
 const exe = ["C:/Program Files/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe", process.env.STOOP_CHROME].find((p) => p && require("node:fs").existsSync(p));
 const browser = await chromium.launch({
@@ -138,7 +145,7 @@ try {
   await buyer.getByRole("button", { name: "Continue" }).click();
   await buyer.getByLabel("Message the seller’s assistant").fill("Does it fold flat for a car trunk?");
   await buyer.getByRole("button", { name: "Send" }).click();
-  await until("assistant answers the question", async () => (await buyer.locator(".msg:not(.me)").count()) > 0);
+  await until("assistant answers the question", async () => (await buyer.locator(".msg:not(.me)").count()) > 0, 60_000);
   await buyer.getByLabel("Your offer").fill("95");
   await buyer.getByRole("button", { name: "Send Offer" }).click();
   await buyer.getByText(/Waiting for the owner to say yes/).waitFor({ timeout: 30_000 });
@@ -164,20 +171,30 @@ try {
 
   // the camera took the before photo when the window opened (item on the porch)
   const state = async () => (await (await fetch(`${BASE}/s/${shopId}/web/seller/state`, { headers: { Authorization: `Bearer ${sellerToken}` } })).json()) as { sales: Array<{ state: string; before: { presence: string } | null; presenceEvents: number }> };
-  await until("before photo", async () => (await state()).sales[0]?.before?.presence === "present");
+  if (!target) await until("before photo", async () => (await state()).sales[0]?.before?.presence === "present");
+  else await until("before photo", async () => !!(await state()).sales[0]?.before || (await state()).sales[0]?.state === "DEGRADED", 60_000);
   await shot(seller, "shop-sale-window-1440");
 
   // ---------- pickup: I'm here, someone at the door, item gone
   step("buyer taps I'm Here; the camera sees a person, then the porch empty");
   await buyer.getByRole("button", { name: "I’m Here" }).click();
   await buyer.getByText("You’re checked in").waitFor();
-  scene.person = 1;
-  scene.item = "absent";
-  await until("presence from the camera's motion", async () => (await state()).sales[0]!.presenceEvents > 0, 40_000);
-  scene.person = 0;
-  await buyer.getByRole("button", { name: "Got It" }).waitFor({ timeout: 40_000 });
-  await shot(buyer, "pass-verified-390");
-  await buyer.getByRole("button", { name: "Got It" }).click();
+  if (!target) {
+    scene.person = 1;
+    scene.item = "absent";
+    await until("presence from the camera's motion", async () => (await state()).sales[0]!.presenceEvents > 0, 40_000);
+    scene.person = 0;
+    await buyer.getByRole("button", { name: "Got It" }).waitFor({ timeout: 40_000 });
+    await shot(buyer, "pass-verified-390");
+    await buyer.getByRole("button", { name: "Got It" }).click();
+  } else {
+    // real vision on a test pattern: no item seen, so both people confirm (waits out the presence window)
+    step("live: the camera can't confirm a test pattern, so seller and buyer both confirm");
+    await until("needs confirmation", async () => ["REVIEW", "DEGRADED"].includes((await state()).sales[0]!.state), 6 * 60_000);
+    await seller.reload();
+    await seller.getByRole("button", { name: "The Buyer Has It" }).click({ timeout: 15_000 });
+    await buyer.getByRole("button", { name: "I Have It" }).click({ timeout: 15_000 });
+  }
   await buyer.getByText("All done. It’s yours.").waitFor({ timeout: 15_000 });
   await shot(buyer, "pass-done-390");
 
@@ -201,7 +218,7 @@ try {
   if (errors.length) console.log(`\nBrowser errors (${errors.length}):\n  ${[...new Set(errors)].slice(0, 20).join("\n  ")}`);
   console.log(`\nScreenshots: ${shots}`);
   await browser.close();
-  server.stop();
-  http.close();
+  server?.stop();
+  http?.close();
   process.exit(failed ? 1 : 0);
 }

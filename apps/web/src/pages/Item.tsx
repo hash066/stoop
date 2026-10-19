@@ -1,6 +1,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { act, api, ApiError, dollars, isPhone, money, tokens } from "../api.ts";
 import { ApprovalPrompt, Composer, Thread, useConversation } from "../conversation.tsx";
+import { speak } from "../voice.ts";
 import { Bar, Closed, Link, QR, Spinner, usePoll, useTitle } from "../ui.tsx";
 import { Feedback } from "./Feedback.tsx";
 
@@ -183,6 +184,23 @@ function Buying({ shop, listing, token, state, refresh }: { shop: string; listin
     }
   };
 
+  // Everything typed here goes to the seller's assistant: it answers questions from the listing and
+  // treats "would you take $90?" as an offer, within the owner's rules.
+  const message = async (text: string, aloud: boolean) => {
+    const t = text.trim();
+    if (!t || conv.busy) return;
+    conv.add({ who: "me", text: t });
+    conv.setBusy(true);
+    try {
+      const { spoken } = await conv.run("ask_seller", { listingId: listing.id, message: t.slice(0, 800) });
+      if (aloud) speak(spoken);
+    } catch (e) {
+      conv.add({ who: "stoop", text: e instanceof Error ? e.message : "That didn’t go through." });
+    } finally {
+      conv.setBusy(false);
+    }
+  };
+
   let panel: ReactNode;
   if (deal && DONE_OK.includes(deal.state)) {
     panel = (
@@ -256,7 +274,7 @@ function Buying({ shop, listing, token, state, refresh }: { shop: string; listin
       ) : null}
       {panel}
       {!deal || !PAID.includes(deal.state) ? (
-        <Composer onSay={(t, aloud) => void conv.say(t, aloud)} busy={conv.busy} label="Message the seller’s assistant" placeholder="Ask a question or make an offer…" />
+        <Composer onSay={(t, aloud) => void message(t, aloud)} busy={conv.busy} label="Message the seller’s assistant" placeholder="Ask a question or make an offer…" />
       ) : null}
       {conv.busy ? <Spinner label="The seller’s assistant is answering…" /> : null}
     </section>

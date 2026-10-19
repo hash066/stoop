@@ -495,7 +495,7 @@ function SaleRow({ shop, token, sale, porch, camOn, onDone, toast }: { shop: str
   };
 
   let note: ReactNode = null;
-  if (sale.state === "FUNDS_HELD" || sale.state === "PASS_ISSUED" || (sale.state === "WINDOW_OPEN" && !sale.checkInAt))
+  if (sale.state === "FUNDS_HELD" || sale.state === "PASS_ISSUED" || (sale.state === "WINDOW_OPEN" && !sale.checkInAt && sale.before?.presence !== "present"))
     note = (
       <p className="note warn">
         Put the {sale.title} out now: {porch.replace(/\.$/, "")}.{camOn ? "" : " Turn your porch camera on, too."}

@@ -71,7 +71,8 @@ const REFUSALS: Record<ScamSignal, string> = {
 
 const SYSTEM_PROMPT = `You are the selling assistant for one household item on Stoop. You speak to buyers (people or their AI agents).
 Rules you must follow:
-- You are an AI; the owner approves every sale. Be brief, warm and concrete (1-3 sentences).
+- You are an AI working within the owner's rules. Be brief, warm and concrete (1-3 sentences).
+- Answer questions only from the listing's title and description. If they don't say (size, folding, defects, history), say plainly that the listing doesn't say. Never guess or invent details.
 - You never know the owner's minimum price. To respond to an offer, call evaluate_offer first.
 - If evaluate_offer says acceptable, call propose_acceptance with the buyer's exact offer.
 - Otherwise reply with send_reply using the counter amount evaluate_offer gave you (or a higher one up to the ask).
@@ -209,6 +210,7 @@ export class Negotiator {
     try {
       const facts = [
         `Item: ${listing.title}. Asking ${dollars(listing.askMinor)}.`,
+        `Listing description: ${listing.description.slice(0, 600)}`,
         offerFromText !== undefined ? `Buyer's offer: ${offerFromText} cents.` : "The buyer made no offer.",
         `Buyer says: """${input.buyerText.slice(0, 800)}"""`,
       ].join("\n");
@@ -273,7 +275,7 @@ function templateReply(
   if (s.acceptOutcome === "awaiting_seller") return `${dollars(s.buyerOfferMinor!)} could work. I'm checking with the owner now and will confirm shortly.`;
   if (s.oracle?.counterMinor) return `Thanks for the offer of ${dollars(s.buyerOfferMinor!)}. The best I can do is ${dollars(s.oracle.counterMinor)}. It's in good shape and pickup is contactless from the porch.`;
   if (s.buyerOfferMinor !== undefined) return `I can't go that low, sorry. The asking price is ${dollars(listing.askMinor)}.`;
-  return `It's the ${listing.title}, asking ${dollars(listing.askMinor)}. Pickup is contactless from the porch, and your payment is held until the pickup is verified. Want to make an offer?`;
+  return `I only know what the listing says: it's the ${listing.title}, asking ${dollars(listing.askMinor)}. Pickup is contactless from the porch, and your payment is held until the pickup is verified. Want to make an offer?`;
 }
 
 /** Offline policy for ScriptedModel: same tool sequence a well-behaved LLM should follow. */
