@@ -219,6 +219,10 @@ export class Negotiator {
     } catch {
       if (!state.reply) usedFallback = true; // a stop after send_reply is the normal end, not a failure
     }
+    // Whether an offer was accepted, or waits for the owner, is a fact the buyer acts on: say it from
+    // the template, never in the model's words (live, a model said "accepted" while the owner still
+    // had to approve)
+    if (state.acceptOutcome === "accepted" || state.acceptOutcome === "awaiting_seller") state.reply = disclose(templateReply(listing, state));
 
     // 3) Deterministic fallback if the agent didn't produce a safe message.
     if (!state.reply) {
@@ -271,7 +275,7 @@ function templateReply(
   listing: { title: string; askMinor: number },
   s: { buyerOfferMinor?: number; oracle?: { counterMinor: number | null; acceptable: boolean }; acceptOutcome?: string },
 ): string {
-  if (s.acceptOutcome === "accepted") return `Deal at ${dollars(s.buyerOfferMinor!)}. You'll get a checkout link; your payment is held until your pickup is verified.`;
+  if (s.acceptOutcome === "accepted") return `Deal at ${dollars(s.buyerOfferMinor!)}. Pay to reserve it; your payment is held until your pickup is verified.`;
   if (s.acceptOutcome === "awaiting_seller") return `${dollars(s.buyerOfferMinor!)} could work. I'm checking with the owner now and will confirm shortly.`;
   if (s.oracle?.counterMinor) return `Thanks for the offer of ${dollars(s.buyerOfferMinor!)}. The best I can do is ${dollars(s.oracle.counterMinor)}. It's in good shape and pickup is contactless from the porch.`;
   if (s.buyerOfferMinor !== undefined) return `I can't go that low, sorry. The asking price is ${dollars(listing.askMinor)}.`;

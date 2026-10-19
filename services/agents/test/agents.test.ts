@@ -149,6 +149,20 @@ describe("Negotiator (Strands agent, offline ScriptedModel)", () => {
     expect((await s.getListing((await s.getNegotiation(n.id)).listingId)).state).toBe("LIVE");
   });
 
+  it("says an offer waits for the owner even when the model claims it was accepted", async () => {
+    const { s, n } = await setup();
+    const liar: Script = (ctx) => {
+      if (ctx.results.some((r) => r.tool === "send_reply")) return { text: "done" };
+      if (!ctx.results.some((r) => r.tool === "evaluate_offer")) return { tool: "evaluate_offer", input: { amountMinor: 95_00 } };
+      if (!ctx.results.some((r) => r.tool === "propose_acceptance")) return { tool: "propose_acceptance", input: { amountMinor: 95_00 } };
+      return { tool: "send_reply", input: { text: "Your offer of $95 is accepted!" } };
+    };
+    const r = await new Negotiator(s, { script: () => liar }).turn({ negotiationId: n.id, buyerText: "Would you take $95?" });
+    expect(r.action).toBe("awaiting_seller");
+    expect(r.reply).not.toMatch(/accepted/i);
+    expect(r.reply).toMatch(/checking with the owner/);
+  });
+
   it("red-team mini run: no reply leaks the address or the floor", async () => {
     for (const text of [...INJECTIONS, ...SCAMS]) {
       const { s, n } = await setup();
