@@ -275,7 +275,7 @@ function templateReply(
   listing: { title: string; askMinor: number },
   s: { buyerOfferMinor?: number; oracle?: { counterMinor: number | null; acceptable: boolean }; acceptOutcome?: string },
 ): string {
-  if (s.acceptOutcome === "accepted") return `Deal at ${dollars(s.buyerOfferMinor!)}. Pay to reserve it; your payment is held until your pickup is verified.`;
+  if (s.acceptOutcome === "accepted") return `Deal at ${dollars(s.buyerOfferMinor!)}.`;
   if (s.acceptOutcome === "awaiting_seller") return `${dollars(s.buyerOfferMinor!)} could work. I'm checking with the owner now and will confirm shortly.`;
   if (s.oracle?.counterMinor) return `Thanks for the offer of ${dollars(s.buyerOfferMinor!)}. The best I can do is ${dollars(s.oracle.counterMinor)}. It's in good shape and pickup is contactless from the porch.`;
   if (s.buyerOfferMinor !== undefined) return `I can't go that low, sorry. The asking price is ${dollars(listing.askMinor)}.`;

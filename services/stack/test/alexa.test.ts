@@ -67,8 +67,8 @@ describe("the Stoop skill on Alexa", () => {
     await tool(post, shop.id, "buyer", buyer, "make_offer", { listingId, amountDollars: 95 });
 
     // not linked yet: Alexa explains how
-    expect((await say(post, { type: "LaunchRequest" })).speech).toMatch(/six digit code/);
-    expect((await say(post, intent("OffersIntent"))).speech).toMatch(/six digit code/);
+    expect((await say(post, { type: "LaunchRequest" })).speech).toMatch(/six digits/);
+    expect((await say(post, intent("OffersIntent"))).speech).toMatch(/six digits/);
 
     // the code from the shop page (only for that shop's own seller token)
     expect((await post("/api/alexa/pair", { shop: shop.id, token: "sk_wrong" })).status).toBe(401);

@@ -112,7 +112,7 @@ export function parseWant(q: string): { what: string; maxMinor?: number } {
 }
 
 const SELLER_TOOLS = new Set(["my_items", "list_items", "set_mandate", "review_offers", "respond_to_offer", "set_pickup_preferences", "handoff_status", "get_receipt", "confirm_pickup", "cancel_sale", "confirm_action"]);
-const LINK_FIRST = "To connect your shop, open it on the Stoop website, tap Connect Alexa, and tell me the six digit code.";
+const LINK_FIRST = "To connect, open your shop on the Stoop website, tap Get a Code under Talk to your shop on Alexa, and tell me the six digits.";
 const ASK_YES = "Say yes to approve, or no to cancel.";
 
 type Found = { shop: string; shopName: string; listingId: string; title: string; askMinor: number; zip: string; rating: { avg: number | null; verified: number } };
