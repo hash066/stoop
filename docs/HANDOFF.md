@@ -98,7 +98,7 @@
 
 **AWS:**
 - Profile **`stoop`**, created with `aws login` (console credentials; account `428516841578`, root user; temporary credentials refresh automatically). Use `--profile stoop` or `AWS_PROFILE=stoop`; the JS SDK v3.1152 reads it.
-- **Account activation is incomplete** (as of Oct 17, 22:15 IST): only STS, IAM, ECR, Bedrock, Budgets and the AgentCore control plane answer. CloudFormation, KMS, DynamoDB, Lambda, Step Functions, SQS, S3, CloudWatch Logs, EC2 and Lightsail return `OptInRequired` / `SubscriptionRequired`. **Check with exit codes**, not `| head -1`: CLI errors start with a blank line, which once made blocked calls look like empty successes.
+- **AWS is active since Oct 19** (support cleared the account sign-up). `aws login` sessions expire overnight: re-run `aws login --profile stoop` (the user approves in the browser). Check services by exit code, not `| head -1`: CLI errors start with a blank line.
 - Budget: `stoop-hackathon-25usd` ($25/month, credits excluded, emails at 80% and 100% actual and 100% forecast). The account has $100 of credits.
 - Docker 29.4 is installed (x86_64 daemon; use `docker buildx --platform linux/arm64` for AgentCore images).
 
@@ -123,18 +123,18 @@
 | Policy Kernel, receipts, Settlement, UCP, Ring bridge, ring-sim, verifier, agents, MCP server, stack | see README | Done; agents verified on live Bedrock |
 | **Address boundary** | `services/settlement/src/boundary.ts` | Done. All address plaintext goes through it; re-derives R2 from the store |
 | **AWS adapters** (Kiro tasks 7–9) | `services/settlement/src/aws/` (`@stoop/settlement/aws`) | Done, unit-tested with `aws-sdk-client-mock` |
-| **CDK StoopStack** (task 10) | `infra/` | `cdk synth` clean; **not deployed** (activation) |
+| **CDK StoopStack** (task 10) | `infra/` | **Deployed Oct 19** (`infra/outputs.json`, gitignored). Verified: full sale on DynamoDB/KMS/Vault Lambda/SFN→SQS; root `kms:Decrypt` → AccessDenied; Lambda reveals the address only to the bound device |
 | Ring Playground run (Oct 18) | `/ring/snapshot/:deviceId`, `/ring/bind`, Ops buttons | Token auth + device listing work (one device listed; the user owns no Ring hardware). Image download returns 416 MEDIA_NOT_FOUND, now handled as "no recording" → camera unavailable → dual-confirm path. **Live view NOT verified.** Real media needs a physical Ring device; the demo uses the built-in signed simulator + labelled footage |
 | MCP Tasks UI | alexa-sim Developer view → "Watch my sale as a task" | Done, checked in Chrome |
 | Architecture diagram | `docs/architecture.svg` + `.png` | Done (solid = running, dashed = AWS pending) |
 | Devpost draft | `docs/SUBMISSION.md` | Drafted; TODOs listed at the top |
 | **Hosted mode** (Oct 18) | `services/stack/src/{sandboxes,site,serve}.ts`, `Dockerfile` | Landing + guided tour + private sandbox per visitor + feedback survey. `pnpm tour` passes in 44 s (also from a fresh clone with the image's exact commands). Not online yet: see `docs/DEPLOY.md` |
 | Alexa+ design rules test | `services/stack/test/design-rules.test.ts` | 33 spoken lines: ≤75 words (longest 56), ≤5 options, no ids/JSON/URLs |
-| AWS host stack | `infra/lib/host-stack.ts` (`StoopHostStack`) | Synth clean; public (offline) + judge (Bedrock) sites behind CloudFront; deploy when activation clears |
+| AWS host stack | `infra/lib/host-stack.ts` (`StoopHostStack`) | **Deployed Oct 19.** Tester site https://d29kyjvj1jibpu.cloudfront.net (offline), judge site https://d2h8mmod981k0j.cloudfront.net (Bedrock, 2000 calls/day cap). Instance i-0aa13f2eaf63c246d; update with SSM (`docs/DEPLOY.md`). $30 budget `stoop-cap-30usd` with stop-instance + deny-Bedrock actions armed |
 | OSS: Ring starter media helpers | `oss/ring-api-helloworld` | **PR open:** AmazonAppDev/ring-api-helloworld#36 (issue #35) |
 | OSS: `proof-of-handoff` (renamed from `@stoop/…`) | `packages/proof-of-handoff` | Publish-ready (tarball tested in a clean dir); **the user publishes** |
 | Fire TV Garage Mode | `apps/firetv` | Web target works; Android TV emulator deferred (user decides later) |
-| AgentCore Runtime / Memory, hosting | – | Waiting for activation; see §6 |
+| AgentCore Runtime / Memory | – | Not done: agents run in the host containers. Optional if time allows |
 
 ## 6. Work queue
 
@@ -146,7 +146,7 @@
 
 ### P1: blocked on the user (ask; never work around it)
 - **Testers by Monday (the user's goal):** deploy `StoopHostStack` first (`docs/DEPLOY.md`), run `pnpm tour <PublicUrl> <key>`, then the user sends `docs/TESTERS.md`'s message. If AWS is still blocked, offer the Render fallback in DEPLOY.md (the user chose "wait for AWS" on Oct 18; re-ask before switching).
-- **AWS activation.** The user checks the console/billing for a pending verification step or contacts AWS Support. Then: `pnpm --filter @stoop/infra exec cdk bootstrap aws://428516841578/us-east-1 --profile stoop`, `pnpm --filter @stoop/infra deploy`, an integration run against real AWS, and the video shot: `aws kms decrypt` on an address as root → AccessDenied.
+- ~~AWS activation~~ **Done Oct 19**: both stacks deployed and verified (see §5).
 - **Hosting in us-east-1** (EC2 + CloudFront, or AgentCore for the agents) once EC2 activates. Then the Negotiator on AgentCore Runtime with tools calling Settlement over HTTP, AgentCore Observability screenshots, and a judge URL in the README.
 - **npm:** the user runs `npm login`, then `pnpm --filter proof-of-handoff publish --no-git-checks` (the `prepack` builds `dist/`). Afterwards add the npm link to README and SUBMISSION.
 - **Ring:** the user gets a Playground token (30-minute lifetime). Procedure: restart the stack with `FRAME_SOURCE=ring`; the user pastes the token in Ops (localhost:5183) → Connect → **Snapshot** (real 303 flow) → **Use for pickups** → **Live view** (WHEP). Log what breaks in the friction log.

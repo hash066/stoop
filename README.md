@@ -2,6 +2,8 @@
 
 **Sell anything without meeting anyone. Money moves only when your doorbell sees it go.**
 
+**Try it (3 minutes, private sandbox, no sign-up): https://d29kyjvj1jibpu.cloudfront.net**
+
 Stoop is an **Alexa+ add-on** (MCP server + MCP Apps cards) and a **Ring Appstore app**.
 
 - You tell your assistant *"Sell the stroller and the bike. Don't go below $90 on the stroller."*

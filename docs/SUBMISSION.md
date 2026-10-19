@@ -4,7 +4,7 @@
 > Every number must point to a file or a source. **Before submitting, resolve every `TODO`:**
 > - [ ] TODO(team): the one real human story (Marketplace no-show or stranger at the door). If there isn't one, use a clearly labelled persona. Never invent a user.
 > - [ ] TODO: YouTube link (≤ 3:00, public, English captions)
-> - [ ] TODO: live judge URL, once the AWS account finishes activation
+> - [x] Tester site: https://d29kyjvj1jibpu.cloudfront.net (offline agents). Judge site on Amazon Bedrock: https://d2h8mmod981k0j.cloudfront.net
 > - [ ] TODO: links for the two market figures below (OfferUp report; MPB survey), or drop them
 > - [ ] TODO: real porch footage; a real Ring snapshot needs a physical Ring device (the Playground's virtual device has no recordings)
 
@@ -48,7 +48,7 @@ AI agents already sell for people. In late September 2026 a Big Tech shopping ag
 | Strands agents on Amazon Bedrock Nova 2 Lite (live run verified Oct 17) | Ring events in the demo: simulator-signed (the Playground doesn't send webhooks), labelled on screen |
 | Policy Kernel, capability tokens, ES256 receipts, `/verify` | Porch frames: TODO(team) our own labelled footage (placeholders until it lands) |
 | Ring Partner API client: token auth and device listing checked with a Developer Playground token (Oct 18); snapshots, clips and WHEP live view implemented and unit-tested | No physical Ring device: the one device the Playground token lists has no recordings (image download answers `MEDIA_NOT_FOUND`), and live view wasn't verified. Doorbell events come from our signed simulator and porch frames are our labelled footage |
-| AWS adapters + CDK stack, unit-tested | TODO: deployed once the account finishes activation |
+| Deployed on AWS (us-east-1): KMS keys, DynamoDB, the Vault Lambda, the Step Functions saga, EC2 + CloudFront sites. A full sale verified on them; the account root is refused `kms:Decrypt` on an address | AgentCore Runtime not used yet: the agents run inside the host containers |
 
 ## Architecture
 
