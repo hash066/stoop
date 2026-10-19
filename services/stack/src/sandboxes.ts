@@ -20,7 +20,7 @@ import { modelCallsToday } from "@stoop/shared";
 import type { RequestEnvelope } from "ask-sdk-model";
 import { SkillRequestSignatureVerifier, TimestampVerifier } from "ask-sdk-express-adapter";
 import { AlexaLinks, createStoopSkill } from "./alexa.ts";
-import { Street, streetRouter, type StreetWorld } from "./street.ts";
+import { marketListings, searchMarket, Street, streetRouter, type StreetWorld } from "./street.ts";
 import { z } from "zod";
 import { createStack, type Stack, type StackConfig, type WorldSecrets, type WorldState } from "./compose.ts";
 import { landingHtml, tourHtml, expiredHtml } from "./site.ts";
@@ -374,6 +374,13 @@ export async function createSandboxServer(o: SandboxServerOptions) {
   const skill = createStoopSkill({
     skillId: o.alexaSkillId,
     links,
+    street: {
+      search: async (q, maxMinor) => searchMarket(await marketListings(worlds.values() as Iterable<StreetWorld>), { query: q, maxMinor }),
+      buyerToken: async (profileId, shop) => {
+        const p = street.profile(profileId);
+        return p ? street.buyerIn(p, shop) : undefined;
+      },
+    },
     shop: (id) => {
       const w = worlds.get(id);
       if (!w || w.kind !== "shop") return undefined;

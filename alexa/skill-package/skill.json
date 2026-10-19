@@ -12,11 +12,19 @@
             "Alexa, ask stoop shop if I have any offers",
             "Alexa, ask stoop shop how my sale is going"
           ],
-          "keywords": ["sell", "marketplace", "porch", "secondhand", "offers"]
+          "keywords": [
+            "sell",
+            "marketplace",
+            "porch",
+            "secondhand",
+            "offers"
+          ]
         }
       },
       "isAvailableWorldwide": false,
-      "distributionCountries": ["US"],
+      "distributionCountries": [
+        "US"
+      ],
       "category": "SHOPPING",
       "testingInstructions": "Open a shop at https://d29kyjvj1jibpu.cloudfront.net/sell, add a photo and list it, open the listing link in a second browser and make an offer. On the shop page, tap Get a Code under Alexa. Then: 'open stoop shop', say the six digits, 'do I have any offers', 'yes', 'yes', 'how is my sale going'. Payments are test-only; nothing is charged."
     },

@@ -27,6 +27,9 @@ export function Landing() {
             <a href="#voice" className="hide-s">
               Alexa
             </a>
+            <Link to="/street" className="hide-s">
+              Browse
+            </Link>
             <Link to="/sell" className="btn sm">
               Open Your Shop
             </Link>
@@ -166,6 +169,45 @@ export function Landing() {
                 </div>
               </div>
             </article>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------ the street */}
+        <section className="page section" style={{ paddingTop: 0 }} aria-labelledby="street-h">
+          <div className="card grid-2" style={{ padding: "clamp(24px, 4vw, 48px)", alignItems: "center" }}>
+            <div className="stack">
+              <h2 id="street-h">Buying? Send your agent.</h2>
+              <p className="lede">
+                Stoop Street is every porch shop in one place. Tell your agent what you want and the most you’ll pay; it watches the street and haggles with sellers’ assistants for you.
+                It can agree a price. Only you can pay.
+              </p>
+              <div className="row">
+                <Link to="/street" className="btn dark lg">
+                  Browse Stoop Street
+                </Link>
+                <Link to="/me" className="btn ghost lg">
+                  Your Stoop
+                </Link>
+              </div>
+            </div>
+            <div className="card mint stack-s small" aria-hidden="true">
+              {[
+                ["12:02", "Looking for a jogging stroller up to $100 near 62704."],
+                ["12:03", "Found a BOB jogging stroller for $120 at Ana’s porch. Talking to the seller’s assistant."],
+                ["12:03", "They countered at $105. That’s over your limit, so I offered $100."],
+                ["12:05", "The owner said yes: $100. Tap Pay to buy it."],
+              ].map(([t, s]) => (
+                <div key={s} className="row" style={{ gap: 10, alignItems: "flex-start", flexWrap: "nowrap" }}>
+                  <span className="tiny num" style={{ minWidth: 40 }}>
+                    {t}
+                  </span>
+                  <span>{s}</span>
+                </div>
+              ))}
+              <p className="tiny" style={{ paddingTop: 4 }}>
+                Example of an agent’s log.
+              </p>
+            </div>
           </div>
         </section>
 

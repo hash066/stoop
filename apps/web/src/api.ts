@@ -175,6 +175,32 @@ export async function listTools(shop: string, role: "seller" | "buyer", token: s
 // ---------- tokens and this device
 
 const KEY = { seller: "stoop:seller:", buyer: "stoop:buyer:", cam: "stoop:cam:" } as const;
+
+/** One buyer profile across every shop on Stoop Street (name, and a purchase code kept server-side as a hash). */
+export const profile = {
+  get: () => ({ token: localStorage.getItem("stoop:profile") ?? "", name: localStorage.getItem("stoop:profile-name") ?? "" }),
+  set: (token: string, name: string) => {
+    localStorage.setItem("stoop:profile", token);
+    localStorage.setItem("stoop:profile-name", name);
+  },
+  clear: () => {
+    localStorage.removeItem("stoop:profile");
+    localStorage.removeItem("stoop:profile-name");
+  },
+};
+const json = (body: unknown, token?: string) => ({ method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
+export async function createProfile(name: string, purchaseCode: string) {
+  const r = await request<{ token: string; name: string }>("/api/profile", json({ name, purchaseCode }));
+  profile.set(r.token, r.name);
+  return r;
+}
+/** This person's buyer token in one shop (made from their profile the first time). */
+export async function joinShop(shop: string) {
+  const r = await request<{ buyerToken: string }>("/api/profile/join", json({ shop }, profile.get().token));
+  tokens.set("buyer", shop, r.buyerToken);
+  return r.buyerToken;
+}
+export const postJson = json;
 export const tokens = {
   get: (kind: keyof typeof KEY, shop: string) => localStorage.getItem(KEY[kind] + shop) ?? "",
   set: (kind: keyof typeof KEY, shop: string, t: string) => localStorage.setItem(KEY[kind] + shop, t),

@@ -10,6 +10,8 @@ import { Item } from "./pages/Item.tsx";
 import { Landing } from "./pages/Landing.tsx";
 import { Pass } from "./pages/Pass.tsx";
 import { Sell } from "./pages/Sell.tsx";
+import { Me } from "./pages/Me.tsx";
+import { Street } from "./pages/Street.tsx";
 import { Shop } from "./pages/Shop.tsx";
 
 function App() {
@@ -24,6 +26,8 @@ function App() {
     return <Shop key={path + location.search} shop={shop} />;
   }
   if (path === "/sell") return <Sell />;
+  if (path === "/street") return <Street />;
+  if (path === "/me") return <Me />;
   if (path === "/" || path === "") return <Landing />;
   return (
     <>

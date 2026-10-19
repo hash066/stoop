@@ -20,5 +20,6 @@ const host = new HostStack(app, "StoopHostStack", {
   monthlyCapUsd: 30,
   judgeDailyModelCalls: 1000,
   publicDailyModelCalls: 1500,
+  alexaSkillId: process.env.STOOP_ALEXA_SKILL_ID,
 });
 Tags.of(host).add("project", "stoop");

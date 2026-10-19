@@ -74,18 +74,66 @@ export class AlexaLinks {
 /** One stateless MCP call into the shop as its seller, like an Alexa+ client without a session. */
 const callTool = (h: ShopHandle, token: string, name: string, args: Record<string, unknown> = {}) => mcpCall(h.fetch, "seller", token, name, args);
 
+/** What the skill needs from Stoop Street to shop by voice. */
+export interface StreetAccess {
+  search(q: string, maxMinor?: number): Promise<Array<{ shop: string; shopName: string; listingId: string; title: string; askMinor: number; zip: string; rating: { avg: number | null; verified: number } }>>;
+  buyerToken(profileId: string, shop: string): Promise<string | undefined>;
+}
+
+const NUM: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+/** "a hundred", "one hundred fifty", "eighty", "120" -> a number. */
+export function spokenNumber(s: string): number | undefined {
+  const d = /\d+(?:\.\d+)?/.exec(s.replace(/,/g, ""));
+  if (d) return Number(d[0]);
+  let total = 0;
+  let cur = 0;
+  let seen = false;
+  for (const w of s.toLowerCase().split(/[\s-]+/)) {
+    if (w === "a" && !seen) continue;
+    if (w in NUM) {
+      cur += NUM[w]!;
+      seen = true;
+    } else if (w === "hundred") {
+      cur = (cur || 1) * 100;
+      seen = true;
+    } else if (w === "thousand") {
+      total += (cur || 1) * 1000;
+      cur = 0;
+      seen = true;
+    } else if (w !== "and" && seen) break;
+  }
+  return seen ? total + cur : undefined;
+}
+/** "a jogging stroller under a hundred dollars" -> { what: "a jogging stroller", maxMinor: 10000 } */
+export function parseWant(q: string): { what: string; maxMinor?: number } {
+  const m = /\b(?:under|below|less than|for less than|up to|at most|max(?:imum)?)\s+(.+?)(?:\s*dollars?|\s*bucks)?$/i.exec(q.trim());
+  const max = m ? spokenNumber(m[1]!) : undefined;
+  return { what: (m ? q.slice(0, m.index) : q).replace(/\b(for|me|a|an|some)\s*$/i, "").trim() || q, maxMinor: max ? Math.round(max * 100) : undefined };
+}
+
 const SELLER_TOOLS = new Set(["my_items", "list_items", "set_mandate", "review_offers", "respond_to_offer", "set_pickup_preferences", "handoff_status", "get_receipt", "confirm_pickup", "cancel_sale", "confirm_action"]);
 const LINK_FIRST = "To connect your shop, open it on the Stoop website, tap Connect Alexa, and tell me the six digit code.";
 const ASK_YES = "Say yes to approve, or no to cancel.";
 
-export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(id: string): ShopHandle | undefined }) {
+type Found = { shop: string; shopName: string; listingId: string; title: string; askMinor: number; zip: string; rating: { avg: number | null; verified: number } };
+type Attrs = {
+  pendingApprovalId?: string;
+  pendingOfferApprovalId?: string;
+  // shopping by voice
+  results?: Found[];
+  idx?: number;
+  needsCode?: boolean;
+  awaitingCode?: boolean;
+};
+
+export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(id: string): ShopHandle | undefined; street?: StreetAccess }) {
   type Input = Alexa.HandlerInput;
-  const attrs = (h: Input) => h.attributesManager.getSessionAttributes() as { pendingApprovalId?: string; pendingOfferApprovalId?: string };
+  const attrs = (h: Input) => h.attributesManager.getSessionAttributes() as Attrs;
   const userId = (h: Input) => Alexa.getUserId(h.requestEnvelope);
   const intent = (h: Input, ...names: string[]) => Alexa.getRequestType(h.requestEnvelope) === "IntentRequest" && names.includes(Alexa.getIntentName(h.requestEnvelope));
   const slot = (h: Input, name: string) => Alexa.getSlotValue(h.requestEnvelope, name) ?? undefined;
   const speak = (h: Input, text: string, keepOpen: boolean, reprompt?: string) => {
-    const b = h.responseBuilder.speak(text).withSimpleCard("Stoop", text);
+    const b = h.responseBuilder.speak(text).withSimpleCard("Stoop", text.replace(/<[^>]+>/g, ""));
     if (keepOpen) b.reprompt(reprompt ?? "What else can I do for your shop?");
     else b.withShouldEndSession(true);
     return b.getResponse();
@@ -127,7 +175,134 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
     return speak(h, out.text || "Done.", true);
   };
 
+  // ---------------------------------------------------------------- shopping by voice (a linked buyer)
+  const buyer = (h: Input) => {
+    const l = o.links.get(userId(h));
+    return l?.kind === "buyer" ? l : undefined;
+  };
+  const SHOP_FIRST = "To shop by voice, open Your Stoop on the Stoop website, tap Get a Code under Shop by voice, and tell me the six digits.";
+  const zipSaid = (z: string) => `<say-as interpret-as="digits">${z}</say-as>`;
+  const describe = (r: Found, i: number, n: number) =>
+    `${i === 0 ? (n === 1 ? "I found one" : `I found ${n}. The first`) : "Next"}: the ${r.title} for ${$(r.askMinor)}, porch pickup in ${zipSaid(r.zip)}, from ${r.shopName.replace("’", "'")}${r.rating.verified ? `, with ${r.rating.verified} verified pickup${r.rating.verified === 1 ? "" : "s"}` : ""}. Want to make an offer${i < n - 1 ? ", or hear the next one" : ""}?`;
+  const current = (h: Input) => {
+    const a = attrs(h);
+    return a.results?.[a.idx ?? 0];
+  };
+  const buyerCall = async (h: Input, name: string, args: Record<string, unknown> = {}) => {
+    const l = buyer(h)!;
+    const r = current(h)!;
+    const token = await o.street!.buyerToken(l.profileId, r.shop);
+    const handle = o.shop(r.shop);
+    if (!token || !handle) throw new Error("shop closed");
+    return mcpCall(handle.fetch, "buyer", token, name, args);
+  };
+  /** Say what a buyer-side tool said; an approval it needs (checkout) waits for "yes" and, over $100, the code. */
+  const buyerAnswer = (h: Input, out: ToolOut) => {
+    const a = attrs(h);
+    if (out.data.kind === "approval_required" && out.data.pendingActionId) {
+      a.pendingApprovalId = out.data.pendingActionId;
+      a.needsCode = !!out.data.needsVoiceCode;
+      return speak(h, out.text, true, a.needsCode ? "Say yes, then your four digit purchase code. Or say no to cancel." : ASK_YES);
+    }
+    a.pendingApprovalId = undefined;
+    a.needsCode = a.awaitingCode = false;
+    if (out.data.kind === "deal" && out.data.state === "FUNDS_HELD")
+      return speak(h, `Done. ${$(out.data.totalMinor)} is held, not charged, until your pickup is verified. Your pickup pass is in Your Stoop on your phone.`, true);
+    return speak(h, out.text || "Done.", true);
+  };
+  const $ = (minor: number) => `$${(minor / 100).toFixed(minor % 100 ? 2 : 0)}`;
+
+  const buyerHandlers: Alexa.RequestHandler[] = [
+    {
+      canHandle: (h) => Alexa.getRequestType(h.requestEnvelope) === "LaunchRequest" && !!buyer(h),
+      handle: (h) => speak(h, `Welcome back, ${buyer(h)!.name}. Tell me what you’re looking for, like: find a jogging stroller under a hundred dollars.`, true),
+    },
+    {
+      canHandle: (h) => intent(h, "FindIntent"),
+      handle: async (h) => {
+        if (!buyer(h) || !o.street) return speak(h, SHOP_FIRST, true);
+        const { what, maxMinor } = parseWant(slot(h, "query") ?? "");
+        const results = (await o.street.search(what, maxMinor)).slice(0, 5);
+        const a = attrs(h);
+        a.results = results;
+        a.idx = 0;
+        a.pendingApprovalId = undefined;
+        if (!results.length) return speak(h, `I didn’t find ${what}${maxMinor ? ` under ${$(maxMinor)}` : ""} on Stoop Street right now. You can send an agent from Your Stoop to watch for one.`, true);
+        return speak(h, describe(results[0]!, 0, results.length), true, "Say: offer, and a price. Or: next.");
+      },
+    },
+    {
+      canHandle: (h) => intent(h, "AMAZON.NextIntent") && !!buyer(h),
+      handle: (h) => {
+        const a = attrs(h);
+        if (!a.results?.length) return speak(h, "Tell me what you’re looking for first.", true);
+        if ((a.idx ?? 0) + 1 >= a.results.length) return speak(h, "That was the last one I found.", true);
+        a.idx = (a.idx ?? 0) + 1;
+        return speak(h, describe(a.results[a.idx]!, a.idx, a.results.length), true);
+      },
+    },
+    {
+      canHandle: (h) => intent(h, "OfferIntent"),
+      handle: async (h) => {
+        if (!buyer(h)) return speak(h, SHOP_FIRST, true);
+        const r = current(h);
+        const price = Number(slot(h, "price"));
+        if (!r) return speak(h, "Tell me what you’re looking for first, like: find a jogging stroller.", true);
+        if (!(price > 0)) return speak(h, "How much do you want to offer?", true);
+        return buyerAnswer(h, await buyerCall(h, "make_offer", { listingId: r.listingId, amountDollars: price }));
+      },
+    },
+    {
+      canHandle: (h) => intent(h, "BuyIntent"),
+      handle: async (h) => {
+        if (!buyer(h)) return speak(h, SHOP_FIRST, true);
+        const r = current(h);
+        if (!r) return speak(h, "Tell me what you’re looking for first.", true);
+        let out = await buyerCall(h, "checkout");
+        if (out.isError && out.data.code === "no_deal") {
+          // no agreed price yet: offer the asking price, then pay if the seller's rules accept it
+          const offer = await buyerCall(h, "make_offer", { listingId: r.listingId, amountDollars: r.askMinor / 100 });
+          if (offer.data.action !== "accepted") return buyerAnswer(h, offer);
+          out = await buyerCall(h, "checkout");
+        }
+        return buyerAnswer(h, out);
+      },
+    },
+    {
+      canHandle: (h) => intent(h, "AMAZON.YesIntent") && !!buyer(h) && !!attrs(h).pendingApprovalId,
+      handle: async (h) => {
+        const a = attrs(h);
+        if (a.needsCode) {
+          a.awaitingCode = true;
+          return speak(h, "What’s your four digit purchase code?", true, "Say your four digit purchase code.");
+        }
+        return buyerAnswer(h, await buyerCall(h, "confirm_action", { approvalId: a.pendingApprovalId, decision: "accept" }));
+      },
+    },
+    {
+      // the purchase code, digit by digit ("two five eight zero") or as a number
+      canHandle: (h) => intent(h, "LinkShopIntent") && !!buyer(h) && !!attrs(h).awaitingCode && (slot(h, "code") ?? "").replace(/\D/g, "").length === 4,
+      handle: async (h) => {
+        const a = attrs(h);
+        const voiceCode = (slot(h, "code") ?? "").replace(/\D/g, "");
+        return buyerAnswer(h, await buyerCall(h, "confirm_action", { approvalId: a.pendingApprovalId, decision: "accept", voiceCode }));
+      },
+    },
+    {
+      canHandle: (h) => intent(h, "AMAZON.NoIntent") && !!buyer(h) && !!attrs(h).pendingApprovalId,
+      handle: async (h) => buyerAnswer(h, await buyerCall(h, "confirm_action", { approvalId: attrs(h).pendingApprovalId, decision: "decline" })),
+    },
+    {
+      canHandle: (h) => intent(h, "StatusIntent") && !!buyer(h),
+      handle: async (h) => {
+        if (!current(h)) return speak(h, "Your purchases and pickup passes are in Your Stoop on the Stoop website.", true);
+        return buyerAnswer(h, await buyerCall(h, "order_status"));
+      },
+    },
+  ];
+
   const handlers: Alexa.RequestHandler[] = [
+    ...buyerHandlers,
     {
       canHandle: (h) => Alexa.getRequestType(h.requestEnvelope) === "LaunchRequest",
       handle: (h) => {
@@ -142,6 +317,7 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
         const code = (slot(h, "code") ?? "").replace(/\D/g, "");
         const link = code.length === 6 ? o.links.redeem(code, userId(h)) : undefined;
         if (!link) return speak(h, "That code didn’t work. Codes last ten minutes; get a new one on your shop page, then tell me the six digits.", true, LINK_FIRST);
+        if (link.kind === "buyer") return speak(h, `You’re set up to shop, ${link.name}. Tell me what you’re looking for, like: find a jogging stroller under a hundred dollars.`, true);
         return speak(h, `You’re connected to ${link.name}. Ask me if you have any offers, or how your sale is going.`, true);
       },
     },

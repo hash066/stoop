@@ -3,6 +3,7 @@ import { api, ApiError, base, clock, deviceId, money, tokens, until } from "../a
 import { Camera, Check, Clock, Lock, Phone, Pin, Receipt } from "../icons.tsx";
 import { Closed, Loading, Nav, usePoll, useTitle } from "../ui.tsx";
 import { Feedback } from "./Feedback.tsx";
+import { ReviewForm } from "./Review.tsx";
 
 interface PassView {
   passId: string;
@@ -205,6 +206,7 @@ function Status(p: { view: PassView; inWindow: boolean; busy: boolean; err: stri
             <Receipt /> See the Signed Pickup Receipt
           </a>
         ) : null}
+        {tokens.get("buyer", shop) ? <ReviewForm shop={shop} dealId={view.dealId} token={tokens.get("buyer", shop)} /> : null}
         <Feedback role="buyer" shop={shop} step={9} />
       </div>
     );

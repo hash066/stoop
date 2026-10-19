@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { act, api, ApiError, base, clock, dollars, isPhone, money, request, tokens, toJpeg } from "../api.ts";
 import { ApprovalPrompt, Composer, Thread, useConversation } from "../conversation.tsx";
-import { Alert, Camera, Check, Phone, Qr, Receipt, Spark, Upload, Voice } from "../icons.tsx";
+import { Alert, Camera, Check, External, Phone, Qr, Receipt, Share as ShareIcon, Spark, Upload, Voice } from "../icons.tsx";
 import { Closed, CopyButton, initials, Link, Loading, navigate, Nav, QR, ShareButton, Spinner, usePoll, useTitle, useToast } from "../ui.tsx";
 import { Feedback } from "./Feedback.tsx";
+import { ReviewList, type ShopReview } from "./Review.tsx";
+import { Rating } from "./Street.tsx";
 
 interface ShopItem {
   itemId: string;
@@ -404,6 +406,7 @@ const itemUrl = (shop: string, listingId: string) => `${location.origin}/shop/${
 
 function LiveCard({ shop, item }: { shop: string; item: ShopItem }) {
   const [qr, setQr] = useState(false);
+  const [post, setPost] = useState(false);
   const url = itemUrl(shop, item.listing!.id);
   return (
     <div className="item-card card flat" style={{ padding: 12 }}>
@@ -428,7 +431,47 @@ function LiveCard({ shop, item }: { shop: string; item: ShopItem }) {
           <Qr /> {qr ? "Hide" : "QR"}
         </button>
       </div>
+      <button type="button" className="btn soft sm" aria-expanded={post} onClick={() => setPost(!post)}>
+        <ShareIcon /> Post Everywhere
+      </button>
       {qr ? <QR text={url} label={`QR code for the ${item.title} listing`} /> : null}
+      {post ? <PostEverywhere item={item} url={url} /> : null}
+    </div>
+  );
+}
+
+const PLACES = [
+  ["Facebook Marketplace", "https://www.facebook.com/marketplace/create/item"],
+  ["Craigslist", "https://post.craigslist.org/"],
+  ["Nextdoor", "https://nextdoor.com/for_sale_and_free/"],
+  ["OfferUp", "https://offerup.com/sell/"],
+] as const;
+
+/** Ready-to-paste posts for other marketplaces. Every buyer comes back to Stoop's checkout through the link. */
+function PostEverywhere({ item, url }: { item: ShopItem; url: string }) {
+  const price = money(item.listing!.askMinor);
+  const text = `${item.title}, ${price}. ${CONDITION[item.condition]}.\nContactless porch pickup: pay on Stoop, and you’re only charged once the pickup is verified. Ask questions or make an offer here: ${url}`;
+  return (
+    <div className="stack-s" style={{ paddingTop: 4 }}>
+      <p className="tiny">Paste this anywhere people buy secondhand. Offers and payment all come back through your Stoop link.</p>
+      <pre className="small" style={{ whiteSpace: "pre-wrap", margin: 0, padding: 12, borderRadius: 12, background: "var(--mint-2)", fontFamily: "inherit" }}>
+        {text}
+      </pre>
+      <div className="row" style={{ gap: 8 }}>
+        <CopyButton text={text} label="Copy Post" className="btn dark sm" />
+        {item.photoUrl ? (
+          <a className="btn ghost sm" href={item.photoUrl} download={`${item.title}.jpg`}>
+            Photo
+          </a>
+        ) : null}
+      </div>
+      <div className="row" style={{ gap: 8 }}>
+        {PLACES.map(([name, href]) => (
+          <a key={name} className="btn ghost sm" href={href} target="_blank" rel="noreferrer">
+            {name} <External />
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
@@ -915,6 +958,8 @@ function AssistantPanel({ shop, token, onChange }: { shop: string; token: string
 interface StorefrontData {
   displayName: string;
   zip: string;
+  rating: { avg: number | null; count: number; verified: number };
+  reviews: ShopReview[];
   listings: Array<{ id: string; title: string; askMinor: number; state: string; photoUrl?: string }>;
 }
 
@@ -959,6 +1004,7 @@ function Storefront({ shop, preview }: { shop: string; preview: boolean }) {
           <div>
             <h1 style={{ fontSize: "var(--t-xl)" }}>{sf.displayName}’s porch</h1>
             <p className="muted small">Contactless pickup in {sf.zip}. Pay first; you’re only charged once your pickup is verified.</p>
+            <Rating r={sf.rating} />
           </div>
         </header>
         {live.length ? (
@@ -981,6 +1027,17 @@ function Storefront({ shop, preview }: { shop: string; preview: boolean }) {
             <p className="muted">Check back soon.</p>
           </div>
         )}
+        {sf.reviews.length ? (
+          <section className="stack" style={{ marginTop: 40, maxWidth: 720 }} aria-labelledby="rev-h">
+            <h2 id="rev-h" style={{ fontSize: "var(--t-l)" }}>
+              What buyers said
+            </h2>
+            <ReviewList shop={shop} reviews={sf.reviews} />
+          </section>
+        ) : null}
+        <p style={{ marginTop: 32 }}>
+          <Link to="/street">See everything else on Stoop Street</Link>
+        </p>
       </main>
     </>
   );

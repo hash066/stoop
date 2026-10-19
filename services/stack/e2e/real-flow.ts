@@ -198,6 +198,18 @@ try {
   await buyer.getByText("All done. It’s yours.").waitFor({ timeout: 15_000 });
   await shot(buyer, "pass-done-390");
 
+  step("buyer reviews the pickup; the review links to the signed receipt");
+  await buyer.getByRole("radio", { name: "5 stars" }).click();
+  await buyer.getByLabel(/Anything the next buyer should know/).fill("Easy pickup, exactly as described.");
+  await buyer.getByRole("button", { name: "Post Review" }).click();
+  await buyer.getByText(/Thanks\. Your review is on the seller’s page/).waitFor({ timeout: 15_000 });
+  await buyer.goto(`${BASE}/shop/${shopId}`);
+  await buyer.getByText("What buyers said").waitFor({ timeout: 15_000 });
+  await shot(buyer, "storefront-reviews-390");
+  await buyer.goto(`${BASE}/me`);
+  await buyer.getByRole("heading", { name: "Your purchases" }).waitFor({ timeout: 15_000 });
+  await shot(buyer, "your-stoop-390");
+
   step("seller sees it paid out");
   await until("paid out", async () => ["CAPTURED", "PAYOUT_RECORDED", "CLOSED"].includes((await state()).sales[0]!.state));
   await seller.reload();
@@ -210,6 +222,11 @@ try {
     await seller.setViewportSize({ width: w, height: h });
     await shot(seller, `shop-paid-${w}`);
   }
+  step("Stoop Street lists what's for sale across shops");
+  const street = await open("street", { viewport: { width: 1440, height: 900 } });
+  await street.goto(`${BASE}/street`);
+  await street.getByRole("heading", { name: "Stoop Street" }).waitFor();
+  await shot(street, "street-1440");
   console.log(`\nPASS: real flow end to end. Final deal state: ${(await state()).sales[0]!.state}`);
 } catch (e) {
   failed = true;

@@ -149,3 +149,26 @@ export const Wallet = (p: P) => (
     <path d="M6 6l9-3 1.5 3" />
   </S>
 );
+export const Star = (p: P) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" {...p}>
+    <path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z" fill="currentColor" />
+  </svg>
+);
+export const Search = (p: P) => (
+  <S {...p}>
+    <circle cx="10.5" cy="10.5" r="6.5" />
+    <path d="M20 20l-4.8-4.8" />
+  </S>
+);
+export const Bot = (p: P) => (
+  <S {...p}>
+    <rect x="4" y="7" width="16" height="12" rx="4" />
+    <path d="M12 3v4M9 12.5v1M15 12.5v1M9.5 16h5" />
+  </S>
+);
+export const External = (p: P) => (
+  <S {...p}>
+    <path d="M14 4h6v6M20 4l-9 9" />
+    <path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10" />
+  </S>
+);

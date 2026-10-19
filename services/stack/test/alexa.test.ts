@@ -99,6 +99,52 @@ describe("the Stoop skill on Alexa", () => {
     expect(linked.speech).toMatch(/Welcome back to Ana’s shop/);
   }, 30_000);
 
+  it("shops by voice: find, offer, buy, and the purchase code over $100", async () => {
+    const { post } = await server();
+    const shop = (await (await post("/api/shops", { displayName: "Ana", address: "12 Elm St, Springfield, IL", zip: "62704", porchInstructions: "Bench" })).json()) as { id: string; sellerToken: string };
+    const seller = shop.sellerToken;
+    await post(`/s/${shop.id}/sweep`, { photos: [{ name: "jogging-stroller.jpg", dataUrl: `data:image/jpeg;base64,${Buffer.from("stroller").toString("base64")}` }] }, { Authorization: `Bearer ${seller}` });
+    await tool(post, shop.id, "seller", seller, "appraise_photos");
+    await tool(post, shop.id, "seller", seller, "list_items", { items: ["stroller"] });
+    await tool(post, shop.id, "seller", seller, "set_mandate", { item: "stroller", floorDollars: 90 });
+
+    // a buyer profile on the website, linked to this Alexa with a code
+    const me = (await (await post("/api/profile", { name: "Ben", purchaseCode: "2580" })).json()) as { token: string };
+    const { code } = (await (await post("/api/profile/alexa", {}, { Authorization: `Bearer ${me.token}` })).json()) as { code: string };
+    expect((await say(post, intent("FindIntent", { query: "a stroller" }))).speech).toMatch(/Your Stoop/);
+    expect((await say(post, intent("LinkShopIntent", { code }))).speech).toMatch(/set up to shop, Ben/);
+
+    const found = await say(post, intent("FindIntent", { query: "a jogging stroller under a hundred and fifty dollars" }));
+    expect(found.speech).toMatch(/I found one: the BOB Revolution jogging stroller for \$120, porch pickup in <say-as interpret-as="digits">62704<\/say-as>, from Ana's porch/);
+    const offered = await say(post, intent("OfferIntent", { price: "110" }), found.attrs);
+    expect(offered.speech).toMatch(/\$110 could work/);
+    await tool(post, shop.id, "seller", seller, "respond_to_offer", { decision: "accept" });
+
+    const terms = await say(post, intent("BuyIntent"), offered.attrs);
+    expect(terms.speech).toMatch(/Pay \$1\d\d\.\d\d for the BOB Revolution jogging stroller\?.*purchase code/);
+    const ask = await say(post, intent("AMAZON.YesIntent"), terms.attrs);
+    expect(ask.speech).toMatch(/four digit purchase code/);
+    const paid = await say(post, intent("LinkShopIntent", { code: "2580" }), ask.attrs);
+    expect(paid.speech).toMatch(/held, not charged, until your pickup is verified/);
+  }, 30_000);
+
+  it("a wrong purchase code charges nothing", async () => {
+    const { post } = await server();
+    const shop = (await (await post("/api/shops", { displayName: "Ana", address: "12 Elm St, Springfield, IL", zip: "62704", porchInstructions: "Bench" })).json()) as { id: string; sellerToken: string };
+    await post(`/s/${shop.id}/sweep`, { photos: [{ name: "hybrid-bike.jpg", dataUrl: `data:image/jpeg;base64,${Buffer.from("bike").toString("base64")}` }] }, { Authorization: `Bearer ${shop.sellerToken}` });
+    await tool(post, shop.id, "seller", shop.sellerToken, "appraise_photos");
+    await tool(post, shop.id, "seller", shop.sellerToken, "list_items", { items: ["bike"] });
+    await tool(post, shop.id, "seller", shop.sellerToken, "set_mandate", { item: "bike", floorDollars: 150, autoAcceptAboveDollars: 150 });
+    const me = (await (await post("/api/profile", { name: "Ben", purchaseCode: "2580" })).json()) as { token: string };
+    const { code } = (await (await post("/api/profile/alexa", {}, { Authorization: `Bearer ${me.token}` })).json()) as { code: string };
+    await say(post, intent("LinkShopIntent", { code }));
+    const found = await say(post, intent("FindIntent", { query: "a bike" }));
+    const terms = await say(post, intent("BuyIntent"), found.attrs); // full price, auto-accepted by the seller's rules
+    expect(terms.speech).toMatch(/purchase code/);
+    const ask = await say(post, intent("AMAZON.YesIntent"), terms.attrs);
+    expect((await say(post, intent("LinkShopIntent", { code: "1111" }), ask.attrs)).speech).toMatch(/didn.t match, so nothing was charged/);
+  }, 30_000);
+
   it("refuses requests for another skill, unsigned requests, and runs nothing when the skill is off", async () => {
     const { post } = await server();
     expect((await post("/alexa", envelope({ type: "LaunchRequest" }, {}, "amzn1.ask.skill.someone-else"))).status).toBe(400);

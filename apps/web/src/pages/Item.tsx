@@ -1,10 +1,11 @@
 import { useCallback, useState, type ReactNode } from "react";
-import { api, ApiError, dollars, isPhone, money, tokens } from "../api.ts";
+import { api, ApiError, createProfile, dollars, isPhone, joinShop, money, profile, tokens } from "../api.ts";
 import { ApprovalPrompt, Composer, Thread, useConversation } from "../conversation.tsx";
 import { Camera, Check, Clock, Lock, Pin, Shield, Wallet } from "../icons.tsx";
 import { speak } from "../voice.ts";
 import { Closed, Link, Loading, Nav, QR, usePoll, useTitle } from "../ui.tsx";
 import { Feedback } from "./Feedback.tsx";
+import { ReviewForm } from "./Review.tsx";
 
 interface Listing {
   id: string;
@@ -25,6 +26,7 @@ interface BuyerDeal {
   window: { start: number; end: number } | null;
   passId: string | null;
   active: boolean;
+  reviewed?: boolean;
 }
 interface BuyerState {
   me: { displayName: string };
@@ -161,10 +163,48 @@ function Photos({ listing }: { listing: Listing }) {
 }
 
 function Join({ shop, onJoined, ask }: { shop: string; onJoined(t: string): void; ask: number }) {
+  const p = profile.get();
+  const [fresh, setFresh] = useState(!p.token);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  if (!fresh)
+    return (
+      <div className="card attn stack">
+        <div className="stack-s">
+          <h2 style={{ fontSize: "var(--t-l)" }}>Want it?</h2>
+          <p className="muted small">Make an offer or buy it at {money(ask)}. The seller’s AI assistant answers in seconds.</p>
+        </div>
+        {err ? (
+          <p className="err" role="alert">
+            {err}
+          </p>
+        ) : null}
+        <button
+          className="btn lg block"
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              onJoined(await joinShop(shop));
+            } catch (e) {
+              if (e instanceof ApiError && e.status === 401) {
+                profile.clear();
+                setFresh(true);
+              } else setErr(e instanceof Error ? e.message : "Couldn’t continue. Try again.");
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? "One Moment…" : `Continue as ${p.name}`}
+        </button>
+        <button type="button" className="link small" onClick={() => setFresh(true)}>
+          Not {p.name}?
+        </button>
+      </div>
+    );
   return (
     <form
       className="card attn stack"
@@ -175,9 +215,9 @@ function Join({ shop, onJoined, ask }: { shop: string; onJoined(t: string): void
         setErr("");
         setBusy(true);
         try {
-          const r = await api<{ buyerToken: string }>(shop, "/web/buyer", { body: { displayName: name.trim(), purchaseCode: code } });
-          tokens.set("buyer", shop, r.buyerToken);
-          onJoined(r.buyerToken);
+          // one profile for the whole street: this shop, the next one, your agents and voice shopping
+          await createProfile(name.trim(), code);
+          onJoined(await joinShop(shop));
         } catch (e2) {
           setErr(e2 instanceof Error ? e2.message : "Couldn’t continue. Try again.");
           setBusy(false);
@@ -258,6 +298,7 @@ function Buying({ shop, listing, token, state, refresh }: { shop: string; listin
           <Check />
           <span>It’s yours. Thanks for buying on Stoop.</span>
         </p>
+        {deal.reviewed ? null : <ReviewForm shop={shop} dealId={deal.dealId} token={token} />}
         <Feedback role="buyer" shop={shop} step={9} />
       </div>
     );

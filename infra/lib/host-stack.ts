@@ -25,6 +25,8 @@ export interface HostStackProps extends StackProps {
   judgeDailyModelCalls?: number;
   /** Paid model-call units per day on the public tester site (default 1500). */
   publicDailyModelCalls?: number;
+  /** The Stoop Alexa skill (amzn1.ask.skill.…) whose endpoint is the tester site's /alexa. */
+  alexaSkillId?: string;
 }
 
 export class HostStack extends Stack {
@@ -70,7 +72,7 @@ export class HostStack extends Stack {
       "docker build -t stoop /opt/stoop",
       `ADMIN_KEY=$(aws secretsmanager get-secret-value --region ${this.region} --secret-id ${adminKey.secretArn} --query SecretString --output text)`,
       "install -d -o 1000 -g 1000 /opt/stoop-data-public /opt/stoop-data-judge",
-      run("public", 8080, `-e LLM_MODE=bedrock -e AWS_REGION=${this.region} -e MAX_SANDBOXES=20 -e MAX_SHOPS=80 -e LLM_DAILY_CALL_CAP=${props.publicDailyModelCalls ?? 1500}`),
+      run("public", 8080, `-e LLM_MODE=bedrock -e AWS_REGION=${this.region} -e MAX_SANDBOXES=20 -e MAX_SHOPS=80${props.alexaSkillId ? ` -e ALEXA_SKILL_ID=${props.alexaSkillId}` : ""} -e LLM_DAILY_CALL_CAP=${props.publicDailyModelCalls ?? 1500}`),
       run("judge", 8081, `-e LLM_MODE=bedrock -e AWS_REGION=${this.region} -e MAX_SANDBOXES=10 -e MAX_SHOPS=40 -e DEVICE_DEMO=1 -e LLM_DAILY_CALL_CAP=${props.judgeDailyModelCalls ?? 1000}`),
     );
 

@@ -89,7 +89,12 @@
             "did the buyer pick it up",
             "if the buyer picked it up",
             "about my sale",
-            "where is my sale"
+            "where is my sale",
+            "how's my order",
+            "where's my order",
+            "order status",
+            "how is my order going",
+            "about my order"
           ]
         },
         {
@@ -165,6 +170,62 @@
             "I want to {query}",
             "tell my shop to {query}",
             "can you {query}"
+          ]
+        },
+        {
+          "name": "AMAZON.NextIntent",
+          "samples": []
+        },
+        {
+          "name": "FindIntent",
+          "slots": [
+            {
+              "name": "query",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "find {query}",
+            "find me {query}",
+            "look for {query}",
+            "search for {query}",
+            "I'm looking for {query}",
+            "shop for {query}",
+            "I want to buy {query}",
+            "to find {query}",
+            "to find me {query}"
+          ]
+        },
+        {
+          "name": "OfferIntent",
+          "slots": [
+            {
+              "name": "price",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "offer {price}",
+            "offer {price} dollars",
+            "make an offer of {price}",
+            "make an offer of {price} dollars",
+            "I'll pay {price}",
+            "I'll pay {price} dollars",
+            "would they take {price}",
+            "would they take {price} dollars",
+            "how about {price}",
+            "how about {price} dollars"
+          ]
+        },
+        {
+          "name": "BuyIntent",
+          "samples": [
+            "buy it",
+            "I'll take it",
+            "check out",
+            "pay for it",
+            "buy it now",
+            "pay now"
           ]
         }
       ],
