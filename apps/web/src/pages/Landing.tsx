@@ -321,11 +321,9 @@ function Stage() {
                   </div>
                 </div>
                 <div className="mini-card beat b6" style={{ background: "var(--green)", color: "#fff" }}>
-                  <div className="spread">
-                    <span>Paid out</span>
-                    <b style={{ fontSize: "1.4em", color: "var(--sun)" }}>$90.25</b>
-                  </div>
-                  <div style={{ opacity: 0.75 }}>Camera saw it go · receipt signed</div>
+                  <div>Paid out</div>
+                  <b style={{ display: "block", fontSize: "1.6em", lineHeight: 1.1, color: "var(--sun)" }}>$90.25</b>
+                  <div style={{ opacity: 0.75 }}>Camera saw it go</div>
                 </div>
               </div>
             </div>
@@ -357,7 +355,7 @@ function Stage() {
           <div className="cam-bar">
             <span className="rec">Porch</span>
           </div>
-          <div className="cam-tag beat b5">Someone at the door</div>
+          <div className="cam-tag beat b5 brief">Someone at the door</div>
           <div className="cam-tag beat b6" style={{ background: "var(--sun)" }}>
             ✓ Item gone
           </div>

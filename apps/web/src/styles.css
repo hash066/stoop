@@ -961,7 +961,7 @@ details[open] > summary::before {
 /* the three-device stage */
 .stage {
   position: relative;
-  aspect-ratio: 1.12;
+  aspect-ratio: 0.98;
   width: 100%;
   max-width: 640px;
   justify-self: center;
@@ -1031,9 +1031,9 @@ details[open] > summary::before {
   z-index: 2;
 }
 .phone.cam {
-  right: 26%;
-  bottom: 0;
-  width: 27%;
+  left: 8%;
+  top: 56%;
+  width: 24%;
   z-index: 3;
   transform: rotate(-4deg);
 }
@@ -1262,6 +1262,26 @@ details[open] > summary::before {
     opacity: 0;
   }
 }
+/* a beat that gives way to the next one (the camera's tags share one spot) */
+.b5.brief {
+  animation-name: beat5brief;
+}
+@keyframes beat5brief {
+  0%,
+  62% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  66%,
+  77% {
+    opacity: 1;
+    transform: none;
+  }
+  80%,
+  100% {
+    opacity: 0;
+  }
+}
 .gone {
   animation: gone 12s infinite both;
 }
@@ -1279,6 +1299,9 @@ details[open] > summary::before {
   .beat {
     animation: none;
     opacity: 1;
+  }
+  .b5.brief {
+    opacity: 0;
   }
   .gone {
     animation: none;
