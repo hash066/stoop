@@ -10,6 +10,7 @@ import {
   parseMoneyMinor,
   planOffline,
   withStatedConstraints,
+  reconcilePlan,
   rulesOnlyChecker,
   SCAMS,
   type McpToolInfo,
@@ -220,6 +221,19 @@ describe("offline planner", () => {
     // nothing added when the model already recorded the floor, or when no constraint was stated
     expect(withStatedConstraints({ ...model, calls: offline.calls }, offline).calls).toHaveLength(2);
     expect(withStatedConstraints(model, planOffline("Sell the bike", { role: "seller" }, sellerTools)).calls).toHaveLength(1);
+  });
+
+  it("follows an explicit command over the model's reading (found live: Nova answered 'Check out' with get_listing)", () => {
+    const state = { role: "buyer" as const, activeDealId: "deal_1", activeListingId: "lst_1" };
+    const offline = planOffline("Check out", state, buyerTools);
+    expect(offline.calls[0]?.name).toBe("checkout");
+    const model = { calls: [{ name: "get_listing", args: { listingId: "lst_1" } }], planner: "bedrock:nova" };
+    const plan = reconcilePlan(model, offline);
+    expect(plan.calls.map((c) => c.name)).toEqual(["checkout"]);
+    expect(plan.planner).toBe("bedrock:nova+explicit-command");
+    // open conversation stays with the model
+    const chat = { calls: [{ name: "ask_seller", args: { listingId: "lst_1", message: "Is it in good condition?" } }], planner: "bedrock:nova" };
+    expect(reconcilePlan(chat, planOffline("Is it in good condition?", state, buyerTools))).toBe(chat);
   });
 
   it("buyer search, offer, checkout with voice code", () => {

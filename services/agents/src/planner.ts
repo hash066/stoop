@@ -163,10 +163,25 @@ export function withStatedConstraints(plan: Plan, offline: Plan): Plan {
   return missing.length ? { ...plan, calls: [...plan.calls, ...missing], say: undefined, planner: `${plan.planner}+stated-constraints` } : plan;
 }
 
+/** Commands that move money or commit the user. The parser only emits them for unambiguous words. */
+const COMMAND_TOOLS = new Set(["checkout", "respond_to_offer", "confirm_action", "get_pickup_pass"]);
+
+/**
+ * Reconcile the model's plan with the deterministic parser. An explicit transactional command the
+ * parser recognised ("check out", "accept", "yes") is the user's decision: if the model did something
+ * else (found live: Nova answered "Check out" with get_listing), follow the user's words. Otherwise
+ * keep the model's plan, plus any constraint it dropped.
+ */
+export function reconcilePlan(model: Plan, offline: Plan): Plan {
+  const command = offline.calls.find((c) => COMMAND_TOOLS.has(c.name));
+  if (command && !model.calls.some((c) => c.name === command.name)) return { ...offline, planner: `${model.planner}+explicit-command` };
+  return withStatedConstraints(model, offline);
+}
+
 export async function planTurn(utterance: string, state: PlannerState, tools: McpToolInfo[], skill: string): Promise<Plan> {
   if (llmMode() === "bedrock" && takeModelCalls(1)) {
     try {
-      return withStatedConstraints(await planBedrock(utterance, state, tools, skill), planOffline(utterance, state, tools));
+      return reconcilePlan(await planBedrock(utterance, state, tools, skill), planOffline(utterance, state, tools));
     } catch {
       return { ...planOffline(utterance, state, tools), planner: "offline-fallback" };
     }
