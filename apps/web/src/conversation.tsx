@@ -62,7 +62,6 @@ export function useConversation(o: { shop: string; role: "seller" | "buyer"; tok
         ctx.current.activeListingId = d.listingId;
         if (d.dealId) ctx.current.activeDealId = d.dealId;
         add({ who: "seller", text: d.reply ?? r.text });
-        if (d.action === "awaiting_seller") add({ who: "stoop", text: "The owner has to approve this price. You’ll see their answer here; you can close the page and come back with the same link." });
         if (d.action === "accepted") add({ who: "stoop", text: `Accepted at ${money(ladderLast(d))}. Pay below to reserve it.` });
         return d.reply ?? r.text;
       }
