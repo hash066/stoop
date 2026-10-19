@@ -20,3 +20,4 @@ tools/record-demo/qa-shots/
 
 # CDK deploy outputs (resource ARNs for this account)
 infra/outputs.json
+infra/outputs-host.json
