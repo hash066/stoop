@@ -111,7 +111,13 @@
 - `LLM_MODE` unset = offline (ScriptedModel + templates); `LLM_MODE=bedrock` = live Bedrock (Nova 2 Lite).
 - Demo tokens: seller `seller-demo-okafor`; buyers `buyer-demo-dana` (purchase code 4821) and `buyer-demo-lee`. Local demo values in `services/stack/src/compose.ts` (`DEMO`), not real credentials.
 
-## 5. Current state (verified Oct 19; the web app row is the newest)
+## 5. Current state (verified Oct 19; newest first)
+
+- **Stoop Street** (`/street`, `/me`): every shop in one market, receipt-bound reviews, buyer agents that haggle within a budget (`services/stack/src/street.ts`), Post Everywhere, link previews.
+- **Shops persist** under `/opt/stoop-data-<site>/worlds` and come back after a redeploy (checked on the live site). Deploys stop containers gracefully; expect about 20 s of 504s while they start.
+- **Alexa skill** "stoop shop": deployed to the user's developer account (`alexa/`, skill `amzn1.ask.skill.ab1fff90-...`, development stage). Checked through Amazon's Alexa simulator against the live site: link by code, offers, two yeses; find, offer, buy, purchase code. Redeploy the package with `ask deploy` from `alexa/` (profile in `C:\Users\asus\.ask\cli_config`).
+- **AgentCore Runtime**: `StoopAgentStack` (`infra/lib/agent-stack.ts`), runtime `stoop_negotiator-e2dr9EHj7e`; both sites set `NEGOTIATOR_RUNTIME_ARN`. Rebuild with `pnpm --filter @stoop/negotiator-runtime build`, then `cdk deploy StoopAgentStack` (env `STOOP_HOST_ROLE_NAME`).
+- Not done: AgentCore Memory and GenAI traces; hosted shops on DynamoDB/KMS (they use the instance disk); Alexa beta-test invites for judges.
 
 - **The tester product is the web app** (`apps/web`, served at the site root): real shops (seller's own address, encrypted), photos priced by Bedrock (AI estimates labelled), a private lowest price, share links, a buyer on another device who messages the seller's assistant, pays (held, never charged), opens a phone-bound pickup pass and taps I'm Here, and a **phone or laptop as the porch camera** (before/after photos, person counts from Bedrock vision). The Alexa+ device tour is at `/demo`, linked only on the judge site.
 - Verified: `pnpm --filter @stoop/stack e2e` (three Chrome profiles: seller 1440 px, buyer phone, camera phone) ends CLOSED locally; with `-- --target https://d29kyjvj1jibpu.cloudfront.net` it ends CLOSED on the live site with real Bedrock (both-confirm path, because Chrome's fake camera shows no item).
