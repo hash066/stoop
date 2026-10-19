@@ -17,7 +17,7 @@ mountCard("deal-approval", (data: any, { app, root }) => {
       h("div", { class: "row" }, h("span", {}, "Verified pickup"), h("span", { class: "num" }, money(data.feeMinor))),
       h("div", { class: "row" }, h("span", {}, "Tax"), h("span", { class: "num" }, money(data.taxMinor))),
       h("div", { class: "row" }, h("strong", {}, "Total"), h("strong", { class: "num" }, money(data.totalMinor))),
-      h("p", { class: "muted" }, "Held, not charged, until your doorbell-verified pickup. Not verified: never charged."),
+      h("p", { class: "muted" }, "Held, not charged, until your pickup is verified. Not verified: never charged."),
       data.needsVoiceCode ? h("span", { class: "pill amber" }, "Over $100 · purchase code needed") : null,
     );
     return;

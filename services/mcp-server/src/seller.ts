@@ -43,7 +43,7 @@ const STATE_SPEECH: Record<string, string> = {
   PASS_ISSUED: "Payment is held and the buyer has their pickup pass.",
   WINDOW_OPEN: "The pickup window is open. I'm watching the porch.",
   STILL_THERE: "The buyer checked in, but the item still looks like it's on the porch.",
-  INSPECTION: "Pickup verified by your doorbell. The buyer has a short inspection window, then the money is released.",
+  INSPECTION: "Pickup verified by your porch camera. The buyer has a short inspection window, then the money is released.",
   VOIDED: "That sale didn't happen, so the buyer's hold was released.",
   REVIEW: "I couldn't fully verify the pickup. If the buyer has it, say confirm pickup.",
   DEGRADED: "Your camera wasn't available, so I need you and the buyer to confirm the pickup.",
@@ -226,7 +226,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
       }
       if (!drafts.length) return result("Those are already for sale.", { kind: "listings", listings: [] }, ctx.cards, "listing-card");
       const approvals = await Promise.all(drafts.map((d) => s.requestApproval(s.publishTerms(d), who, `Publish ${d.title} at ${$(d.askMinor)}`)));
-      const summary = `List ${drafts.map((d) => `the ${d.title} at ${$(d.askMinor)}`).join(" and ")}? Pickup is contactless from your porch, verified by your doorbell.`;
+      const summary = `List ${drafts.map((d) => `the ${d.title} at ${$(d.askMinor)}`).join(" and ")}? Pickup is contactless from your porch, verified by your porch camera.`;
       const cardData = { kind: "listings", listings: drafts.map((d) => ({ listingId: d.id, title: d.title, askMinor: d.askMinor, photoUrl: d.photoUrls[0], state: "AWAITING_SELLER_OK" })) };
       return withApproval({
         server,
@@ -373,7 +373,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
       const fee = Math.round(amount * 0.05);
       const prefs = await ctx.prefs.get(actor.householdId);
       const listing = await s.getListing(appr.terms.listingId!);
-      const summary = `Sell the ${inSentence(listing.title)} to ${appr.terms.buyerPseudonym} for ${$(amount)}? You get ${$(amount - fee)} after Stoop's 5% fee, released only after your doorbell verifies the pickup.${prefs ? ` Pickup ${prefs.label}.` : ""}`;
+      const summary = `Sell the ${inSentence(listing.title)} to ${appr.terms.buyerPseudonym} for ${$(amount)}? You get ${$(amount - fee)} after Stoop's 5% fee, released only after your porch camera verifies the pickup.${prefs ? ` Pickup ${prefs.label}.` : ""}`;
       const approve = async () => {
         try {
           const { token } = await s.resolveApproval(id!, true, who);
@@ -431,7 +431,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
     "handoff_status",
     {
       title: "How is my sale going",
-      description: "Status of the current sale: payment, pickup window, doorbell verification, payout.",
+      description: "Status of the current sale: payment, pickup window, camera verification, payout.",
       inputSchema: z.object({ dealId: z.string().optional() }),
       annotations: { readOnlyHint: true },
       _meta: uiMeta(ctx.cards, "handoff-timeline"),
@@ -485,7 +485,7 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
     "confirm_pickup",
     {
       title: "Confirm the buyer picked it up",
-      description: "When the doorbell couldn't verify a pickup, the owner confirms it (both sides must confirm; capped at $150).",
+      description: "When the porch camera couldn't verify a pickup, the owner confirms it (both sides must confirm; capped at $150).",
       inputSchema: z.object({ dealId: z.string().optional() }),
     },
     async ({ dealId }) => {

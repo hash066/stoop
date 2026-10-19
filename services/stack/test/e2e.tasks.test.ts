@@ -57,7 +57,7 @@ describe("MCP Tasks: watch_handoff", () => {
 
     // Doorbell verifies the pickup: still working (inspection), with the new line.
     expect((await http(stack, "POST", "/sim/scenario/golden", { dealId })).json.state).toBe("INSPECTION");
-    await waitFor(async () => /verified by your doorbell/i.test((await getTask(seller.client, taskId)).statusMessage ?? ""), 3000, "verified status", stack);
+    await waitFor(async () => /verified by your porch camera/i.test((await getTask(seller.client, taskId)).statusMessage ?? ""), 3000, "verified status", stack);
     expect((await getTask(seller.client, taskId)).status).toBe("working");
 
     // Another actor can't see or read it.

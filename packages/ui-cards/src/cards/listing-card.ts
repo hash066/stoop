@@ -24,7 +24,7 @@ mountCard("listing-card", (data: { kind?: string; listings?: L[]; results?: L[];
     h("p", { class: "eyebrow" }, data.results ? "Porch pickup near you" : live ? "Live on Stoop" : "Ready to list"),
     h("h1", {}, first!.title),
     h("div", { class: "row" }, h("span", { class: "big" }, money(first!.askMinor)), h("span", { class: `pill ${live || data.results ? "ok" : "amber"}` }, data.results ? `ZIP ${first!.zip ?? ""}` : live ? "Live" : "Awaiting approval")),
-    h("p", { class: "muted" }, "Contactless porch pickup. Payment is held until the doorbell verifies the handoff."),
+    h("p", { class: "muted" }, "Contactless porch pickup. Payment is held until the porch camera verifies the handoff."),
   );
   for (const l of rest.slice(0, 4)) root.append(h("div", { class: "row" }, h("span", {}, l.title), h("span", { class: "num" }, money(l.askMinor))));
 });

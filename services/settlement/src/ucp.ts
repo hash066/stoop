@@ -83,7 +83,7 @@ export function buildSession(s: Settlement, deal: Awaited<ReturnType<Settlement[
     messages: [
       {
         type: "info",
-        content: "Your payment is held, not charged, until your doorbell-verified pickup. No-show or item missing: the hold is released.",
+        content: "Your payment is held, not charged, until your pickup is verified. No-show or item missing: the hold is released.",
       },
     ],
     links: [{ type: "refund_policy", url: `${base}/policies/refunds` }],
@@ -258,7 +258,7 @@ export function ucpRouter(opts: UcpOptions) {
         ...sess,
         status: "completed",
         order: { id: sess.dealId, status: "held_until_verified_pickup" },
-        messages: [{ type: "info", content: "Funds held. Release happens only after your doorbell-verified pickup and a short inspection window." }],
+        messages: [{ type: "info", content: "Funds held. Release happens only after your verified pickup and a short inspection window." }],
       };
       await store.put(K(sess.id), done);
       return { status: 200, body: publicSession(done) };

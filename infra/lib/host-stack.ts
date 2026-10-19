@@ -1,8 +1,9 @@
 // StoopHostStack: the public tester site and the judge site, behind CloudFront (HTTPS, no domain
 // needed). One small instance builds the Docker image from the public GitHub repo at boot and
 // runs two containers:
-//   :8080  public  - offline agents, up to 60 private sandboxes (testers)
-//   :8081  judge   - LLM_MODE=bedrock (Nova 2 Lite), up to 10 sandboxes
+//   :8080  public  - the Stoop web app for testers: real shops, live models (Nova 2 Lite) under a daily cap
+//   :8081  judge   - the same app plus the Alexa+ device tour, live models under its own daily cap
+// Shops live in memory: replacing a container closes them.
 // Feedback goes to /opt/stoop-data/feedback.jsonl; GET /api/feedback.jsonl?key=<AdminKey secret>.
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
 import * as budgets from "aws-cdk-lib/aws-budgets";
@@ -20,8 +21,10 @@ export interface HostStackProps extends StackProps {
   budgetEmail?: string;
   /** Monthly spending cap in USD (default 30). */
   monthlyCapUsd?: number;
-  /** Paid model-call units per day on the judge site (default 2000). */
+  /** Paid model-call units per day on the judge site (default 1000). */
   judgeDailyModelCalls?: number;
+  /** Paid model-call units per day on the public tester site (default 1500). */
+  publicDailyModelCalls?: number;
 }
 
 export class HostStack extends Stack {
@@ -44,7 +47,7 @@ export class HostStack extends Stack {
       managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")],
     });
     adminKey.grantRead(role);
-    // The judge container runs the agents and vision on Bedrock
+    // Both containers run the agents and vision on Bedrock
     role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
@@ -59,7 +62,7 @@ export class HostStack extends Stack {
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       "set -euxo pipefail",
-      // the image build (pnpm install + three Vite builds) wants more than 2 GB at its peak
+      // the image build (pnpm install + four Vite builds) wants more than 2 GB at its peak
       "fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile",
       "dnf install -y docker git",
       "systemctl enable --now docker",
@@ -67,8 +70,8 @@ export class HostStack extends Stack {
       "docker build -t stoop /opt/stoop",
       `ADMIN_KEY=$(aws secretsmanager get-secret-value --region ${this.region} --secret-id ${adminKey.secretArn} --query SecretString --output text)`,
       "install -d -o 1000 -g 1000 /opt/stoop-data-public /opt/stoop-data-judge",
-      run("public", 8080, ""),
-      run("judge", 8081, `-e LLM_MODE=bedrock -e AWS_REGION=${this.region} -e MAX_SANDBOXES=10 -e LLM_DAILY_CALL_CAP=${props.judgeDailyModelCalls ?? 2000}`),
+      run("public", 8080, `-e LLM_MODE=bedrock -e AWS_REGION=${this.region} -e MAX_SANDBOXES=20 -e MAX_SHOPS=80 -e LLM_DAILY_CALL_CAP=${props.publicDailyModelCalls ?? 1500}`),
+      run("judge", 8081, `-e LLM_MODE=bedrock -e AWS_REGION=${this.region} -e MAX_SANDBOXES=10 -e MAX_SHOPS=40 -e DEVICE_DEMO=1 -e LLM_DAILY_CALL_CAP=${props.judgeDailyModelCalls ?? 1000}`),
     );
 
     const instance = new ec2.Instance(this, "Host", {

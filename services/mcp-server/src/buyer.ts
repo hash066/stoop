@@ -175,7 +175,7 @@ export function createBuyerServer(ctx: StoopContext, actor: BuyerActor, pending:
       const high = total > 100_00;
       const summary =
         `Pay ${$(total)} for the ${deal.itemTitle}? That's ${$(deal.amountMinor)} for the item plus ${$(fee)} for verified pickup, and no tax. ` +
-        "Refund policy: your payment is held, not charged, until your doorbell-verified pickup; if the pickup isn't verified you're never charged.";
+        "Refund policy: your payment is held, not charged, until your pickup is verified; if it isn't verified you're never charged.";
       const complete = async (voiceCode?: string) => {
         const res = await ctx.ucp.request(
           "POST",

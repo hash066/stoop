@@ -1,13 +1,16 @@
-// Hosted mode: `pnpm build:web && pnpm serve` (or the Docker image). One origin serves the landing
-// page, the guided tour and a private sandbox per visitor. Local development keeps using main.ts.
+// Hosted mode: `pnpm build:web && pnpm serve` (or the Docker image). One origin serves the Stoop web
+// app (real shops, each its own private world) and, for judges, the Alexa+ device tour. Local
+// development keeps using main.ts.
 //
 //   PORT=8080            listen port (0.0.0.0)
 //   PUBLIC_ORIGIN        https://… as browsers see it (else derived from X-Forwarded-* / Host)
 //   PUBLIC_PROTO=https   behind a proxy that forwards Host but not X-Forwarded-Proto (CloudFront)
 //   DATA_DIR             where feedback.jsonl goes (default <repo>/.data)
 //   ADMIN_KEY            enables GET /api/feedback.jsonl?key=…
-//   MAX_SANDBOXES        concurrent worlds (default 60), SANDBOX_IDLE_MIN (default 30)
-//   LLM_MODE=bedrock     live models for every sandbox (the judge instance); unset = offline agents
+//   MAX_SANDBOXES        concurrent demo worlds (default 60), SANDBOX_IDLE_MIN (default 30)
+//   MAX_SHOPS            concurrent shops (default 150), SHOP_IDLE_HOURS (default 72)
+//   DEVICE_DEMO=1        link the Alexa+ device tour from the web app (the judges' site)
+//   LLM_MODE=bedrock     live models (Bedrock); LLM_DAILY_CALL_CAP bounds calls per day
 import { serve } from "@hono/node-server";
 import type { Server } from "node:http";
 import { resolve } from "node:path";
@@ -25,10 +28,13 @@ const server = await createSandboxServer({
   adminKey: process.env.ADMIN_KEY,
   maxWorlds: Number(process.env.MAX_SANDBOXES ?? 60),
   idleMs: Number(process.env.SANDBOX_IDLE_MIN ?? 30) * 60_000,
+  maxShops: Number(process.env.MAX_SHOPS ?? 150),
+  shopIdleMs: Number(process.env.SHOP_IDLE_HOURS ?? 72) * 3_600_000,
+  deviceDemo: process.env.DEVICE_DEMO === "1",
 });
 
 const http = serve({ fetch: server.app.fetch, port, hostname: "0.0.0.0" }, () => {
-  console.log(`Stoop hosted sandboxes on :${port} (LLM_MODE=${process.env.LLM_MODE ?? "offline"}, max ${process.env.MAX_SANDBOXES ?? 60} sandboxes)`);
+  console.log(`Stoop on :${port} (LLM_MODE=${process.env.LLM_MODE ?? "offline"}, max ${process.env.MAX_SHOPS ?? 150} shops, ${process.env.MAX_SANDBOXES ?? 60} demos)`);
 }) as Server;
 // CloudFront reuses origin connections for up to 60 s. Node closes idle ones after 5 s by default,
 // so CloudFront would sometimes send a request down a closing socket and answer 502. Outlast it.

@@ -542,7 +542,7 @@ export async function createStack(cfg: StackConfig) {
   app.route("/sim", sim);
 
   // The web product: real sellers and buyers, pickup pass claims, the porch camera
-  app.route("/web", webRouter({ settlement, sellers, buyers, otps, porchcam, vision, bus, now: () => clock.now() }));
+  app.route("/web", webRouter({ settlement, sellers, buyers, otps, porchcam, vision, bus, now: () => clock.now(), frame: (dealId, kind) => lastFrames.get(`${dealId}:${kind}`) }));
 
   app.get("/api/config", (c) =>
     c.json({

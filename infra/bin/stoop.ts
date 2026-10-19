@@ -18,6 +18,7 @@ const host = new HostStack(app, "StoopHostStack", {
   // spending guardrails: STOOP_BUDGET_EMAIL=you@example.com at deploy time (kept out of git)
   budgetEmail: process.env.STOOP_BUDGET_EMAIL,
   monthlyCapUsd: 30,
-  judgeDailyModelCalls: 2000,
+  judgeDailyModelCalls: 1000,
+  publicDailyModelCalls: 1500,
 });
 Tags.of(host).add("project", "stoop");

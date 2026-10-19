@@ -21,7 +21,7 @@ mountCard("handoff-timeline", (data: any, { root }) => {
     { label: "Window open", detail: deal.window ? `${clock(deal.window.start)}–${clock(deal.window.end)}` : undefined, status: reached("WINDOW_OPEN") ? "done" : "todo" },
     { label: "Item on porch (before)", detail: ev.before ? `${ev.before.presence} · ${ev.before.origin === "our_footage" ? "our footage" : ev.before.origin}` : undefined, status: ev.before?.presence === "present" ? "done" : reached("WINDOW_OPEN") ? "now" : "todo" },
     { label: "Buyer checked in", detail: ev.checkInAt ? clock(ev.checkInAt) : undefined, status: ev.checkInAt ? "done" : reached("WINDOW_OPEN") ? "now" : "todo" },
-    { label: "Doorbell saw them", detail: presence ? `${presence.kind === "button_press" ? "doorbell press" : presence.subType} · ${presence.origin === "simulator" ? "simulator-signed" : "Ring"}` : undefined, status: presence ? "done" : "todo" },
+    { label: "Camera saw them", detail: presence ? `${presence.kind === "button_press" ? "doorbell press" : presence.subType} · ${presence.origin === "simulator" ? "simulator-signed" : presence.origin === "porchcam" ? "porch camera" : "Ring"}` : undefined, status: presence ? "done" : "todo" },
     { label: "Item gone (after)", detail: ev.after ? ev.after.presence : undefined, status: ev.after?.presence === "absent" ? "done" : ev.after?.presence === "present" ? "fail" : "todo" },
     { label: "Verified · receipt signed", status: verified ? "done" : failed ? "fail" : "todo" },
     { label: "Money released", status: reached("CAPTURED") ? "done" : verified ? "now" : "todo" },

@@ -75,4 +75,4 @@ export function guardOutgoing(text: string, secrets: LeakSecrets): LeakCheck {
 
 /** Required first-message disclosure (R6). */
 export const AI_DISCLOSURE =
-  "Hi, I'm an AI assistant selling this on the owner's behalf. I can answer questions and take offers; the owner approves every sale.";
+  "Hi, I'm an AI assistant selling this for the owner. I answer questions and take offers within the owner's rules.";

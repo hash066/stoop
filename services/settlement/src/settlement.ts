@@ -52,6 +52,7 @@ export const OTP_WINDOW_MS = 15 * 60 * 1000;
 export const OFFER_RATE_MAX = 8;
 export const OFFER_RATE_WINDOW_MS = 60 * 1000;
 export const AFTER_FRAME_DELAY_MS = 45 * 1000;
+const CONDITION_WORDS = { A: "like new", B: "light wear", C: "visible wear", D: "for parts" } as const;
 export const HOLD_RENEW_MARGIN_MS = 12 * 60 * 60 * 1000;
 
 export class SettlementError extends Error {
@@ -257,7 +258,7 @@ export class Settlement {
       householdId: item.householdId,
       itemId,
       title: overrides.title ?? item.title,
-      description: overrides.description ?? `${item.title}. Condition ${item.condition}. Porch pickup only, verified by doorbell camera.`,
+      description: overrides.description ?? `${item.title}, ${CONDITION_WORDS[item.condition]}. Contactless porch pickup: you pay first, and the payment goes through only once the pickup is verified.`,
       askMinor: overrides.askMinor ?? item.priceBand.listMinor,
       state: blocked ? "BLOCKED_RECALL" : "AWAITING_SELLER_OK",
       version: 1,
@@ -367,7 +368,7 @@ export class Settlement {
       askMinor: l.askMinor,
       zip: l.zip,
       photoUrls: l.photoUrls,
-      pickup: "Contactless porch pickup. Your payment is held until the doorbell camera verifies the handoff.",
+      pickup: "Contactless porch pickup. Your payment is held until the porch camera verifies the handoff.",
     };
   }
 
@@ -537,6 +538,11 @@ export class Settlement {
   }
 
   /** Log a refused request that earns no strike (address request R2, prompt injection R8, links). */
+  async markDisclosed(negotiationId: string) {
+    const n = await this.getNegotiation(negotiationId);
+    if (n.disclosedAt === undefined) await this.saveNego({ ...n, disclosedAt: this.now() });
+  }
+
   async noteRefusal(negotiationId: string, signal: string) {
     const n = await this.getNegotiation(negotiationId);
     const rules: PolicyDecisionRecord["ruleIds"] =

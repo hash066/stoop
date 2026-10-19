@@ -9,7 +9,7 @@ import { AI_DISCLOSURE, scanBuyerText, STRIKE_SIGNALS, type ScamSignal } from "@
 import { createModel, type Script } from "./llm.ts";
 
 export interface NegotiationPort {
-  getNegotiation(id: string): Promise<{ id: string; listingId: string; buyerId: string; state: string; offers: Array<{ by: string; amountMinor: number }>; lastCounterMinor?: number }>;
+  getNegotiation(id: string): Promise<{ id: string; listingId: string; buyerId: string; state: string; offers: Array<{ by: string; amountMinor: number }>; lastCounterMinor?: number; disclosedAt?: number }>;
   getListing(id: string): Promise<{ id: string; title: string; askMinor: number; description: string; state: string }>;
   oracle(negotiationId: string, offerMinor: number): Promise<{ acceptable: boolean; autoAcceptable: boolean; counterMinor: number | null; askMinor: number }>;
   recordOffer(negotiationId: string, by: "buyer" | "seller", amountMinor: number, message: string): Promise<unknown>;
@@ -22,6 +22,8 @@ export interface NegotiationPort {
   noteRefusal(negotiationId: string, signal: string): Promise<unknown>;
   /** R11/X2 offer rate limit; optional so lightweight test ports can omit it. */
   offerAllowed?(negotiationId: string): Promise<boolean>;
+  /** Remember that this buyer was told they're talking to an AI, so it's said once per conversation. */
+  markDisclosed?(negotiationId: string): Promise<unknown>;
 }
 
 export type NegotiatorAction = "counter" | "awaiting_seller" | "accepted" | "declined" | "answered" | "refused" | "blocked" | "rate_limited";
@@ -90,8 +92,15 @@ export class Negotiator {
 
   async turn(input: { negotiationId: string; buyerText: string; offerMinor?: number }): Promise<NegotiatorResult> {
     const n = await this.port.getNegotiation(input.negotiationId);
+    const r = await this.reply(input, n);
+    if (r.reply.startsWith(AI_DISCLOSURE)) await this.port.markDisclosed?.(n.id);
+    return r;
+  }
+
+  private async reply(input: { negotiationId: string; buyerText: string; offerMinor?: number }, n: Awaited<ReturnType<NegotiationPort["getNegotiation"]>>): Promise<NegotiatorResult> {
     const listing = await this.port.getListing(n.listingId);
-    const first = n.offers.length === 0;
+    // The first reply in a conversation says it's an AI (a question counts, not only an offer)
+    const first = this.port.markDisclosed ? n.disclosedAt === undefined : n.offers.length === 0;
     const disclose = (s: string) => (first ? `${AI_DISCLOSURE} ${s}` : s);
 
     // 1) Deterministic screening.
@@ -264,7 +273,7 @@ function templateReply(
   if (s.acceptOutcome === "awaiting_seller") return `${dollars(s.buyerOfferMinor!)} could work. I'm checking with the owner now and will confirm shortly.`;
   if (s.oracle?.counterMinor) return `Thanks for the offer of ${dollars(s.buyerOfferMinor!)}. The best I can do is ${dollars(s.oracle.counterMinor)}. It's in good shape and pickup is contactless from the porch.`;
   if (s.buyerOfferMinor !== undefined) return `I can't go that low, sorry. The asking price is ${dollars(listing.askMinor)}.`;
-  return `It's the ${listing.title}, asking ${dollars(listing.askMinor)}. Pickup is contactless from the porch, and your payment is held until the doorbell verifies it. Want to make an offer?`;
+  return `It's the ${listing.title}, asking ${dollars(listing.askMinor)}. Pickup is contactless from the porch, and your payment is held until the pickup is verified. Want to make an offer?`;
 }
 
 /** Offline policy for ScriptedModel: same tool sequence a well-behaved LLM should follow. */

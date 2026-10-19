@@ -33,7 +33,7 @@ export function registerWatchHandoff(
     {
       title: "Watch my sale until it's done",
       description:
-        "Long-running task: follows the current sale (payment hold, pickup window, doorbell verification, payout) and finishes when it closes or needs a person. Poll tasks/get for progress.",
+        "Long-running task: follows the current sale (payment hold, pickup window, camera verification, payout) and finishes when it closes or needs a person. Poll tasks/get for progress.",
       inputSchema: { dealId: z.string().optional() },
       annotations: { readOnlyHint: true },
       execution: { taskSupport: "required" },

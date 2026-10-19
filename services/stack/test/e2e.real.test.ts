@@ -52,11 +52,17 @@ describe("real two-device flow with a porch camera (no demo data)", () => {
       expect((await call(stack, "seller", seller, "set_mandate", { item: "stroller", floorDollars: 90 })).text).toMatch(/won't go below \$90/);
 
       // The porch camera page: answers Stoop's frame requests with whatever is on the porch now
-      const cam = (await http(stack, "POST", "/web/cam/register", {}, { Authorization: `Bearer ${seller}` })).json.camera as string;
+      // (the page on the seller's phone gets a camera-only token; it can send porch frames and nothing else)
+      const reg = (await http(stack, "POST", "/web/cam/register", {}, { Authorization: `Bearer ${seller}` })).json as { camera: string; camToken: string };
+      const cam = reg.camera;
+      const camAuth = { Authorization: `Bearer ${reg.camToken}` };
+      expect((await http(stack, "POST", "/web/cam/register", {}, { Authorization: `Bearer ${seller}` })).json).toEqual(reg); // same camera until replaced
+      expect((await http(stack, "GET", "/web/cam/next", undefined, { Authorization: "Bearer ck_wrong" })).status).toBe(401);
+      expect((await http(stack, "GET", "/web/seller/state", undefined, camAuth)).status).toBe(401);
       const camLoop = (async () => {
         while (run.on) {
-          const next = await http(stack, "GET", `/web/cam/next?cam=${cam}`, undefined, { Authorization: `Bearer ${seller}` });
-          if (next.json?.want) await http(stack, "POST", "/web/cam/frame", { cam, dataUrl: img(run.scene) }, { Authorization: `Bearer ${seller}` });
+          const next = await http(stack, "GET", "/web/cam/next", undefined, camAuth);
+          if (next.json?.want) await http(stack, "POST", "/web/cam/frame", { dataUrl: img(run.scene) }, camAuth);
           await new Promise((r) => setTimeout(r, 20));
         }
       })();
@@ -71,6 +77,14 @@ describe("real two-device flow with a porch camera (no demo data)", () => {
       expect(pub.json).toMatchObject({ title: "BOB Revolution jogging stroller", askMinor: 120_00, zip: "62704" });
       expect(JSON.stringify(pub.json)).not.toMatch(/Elm St/);
       await call(stack, "buyer", buyer, "make_offer", { listingId, amountDollars: 95 });
+      // both dashboards see the offer waiting on the seller
+      const sst = (await http(stack, "GET", "/web/seller/state", undefined, { Authorization: `Bearer ${seller}` })).json;
+      expect(sst.offers).toEqual([expect.objectContaining({ listingId, amountMinor: 95_00, askMinor: 120_00 })]);
+      expect(sst.items[0]).toMatchObject({ title: "BOB Revolution jogging stroller", priceSource: "comps", listing: { id: listingId, state: "LIVE" } });
+      expect(sst.conversations[0].offers[0]).toMatchObject({ by: "buyer", amountMinor: 95_00 });
+      const bst = (await http(stack, "GET", `/web/buyer/state?listing=${listingId}`, undefined, { Authorization: `Bearer ${buyer}` })).json;
+      expect(bst).toMatchObject({ me: { displayName: "Ben" }, negotiation: { state: "AGREED_PENDING_SELLER", pendingAmountMinor: 95_00 }, deals: [] });
+      expect((await http(stack, "GET", "/web/seller/state", undefined, { Authorization: `Bearer ${buyer}` })).status).toBe(401);
       const accepted = await call(stack, "seller", seller, "respond_to_offer", { decision: "accept" });
       const dealId = accepted.data.dealId as string;
       expect((await call(stack, "buyer", buyer, "checkout", {})).text).toMatch(/held, not charged/);
@@ -91,7 +105,7 @@ describe("real two-device flow with a porch camera (no demo data)", () => {
       // someone else taking the item), takes it, and the camera's motion frame shows a person
       expect((await http(stack, "POST", `/pass/${passId}/checkin`, {}, dev)).status).toBe(200);
       run.scene = "empty porch";
-      await http(stack, "POST", "/web/cam/frame", { cam, dataUrl: img("PERSON at the door"), motion: true }, { Authorization: `Bearer ${seller}` });
+      await http(stack, "POST", "/web/cam/frame", { dataUrl: img("PERSON at the door"), motion: true }, camAuth);
       await waitFor(async () => ((await stack.store.get<{ ringEvents: unknown[] }>(`evidence#${dealId}`))?.ringEvents ?? []).length > 0, 5000, "presence", stack);
       await waitFor(async () => ["VERIFIED", "INSPECTION"].includes((await stack.settlement.getDeal(dealId)).state), 8000, "verified", stack);
 
@@ -102,6 +116,26 @@ describe("real two-device flow with a porch camera (no demo data)", () => {
       const deal = await stack.settlement.getDeal(dealId);
       expect(deal.verdict).toBe("VERIFIED");
       expect(deal.receiptIds).toHaveLength(1);
+
+      // the seller's dashboard shows the whole path and the porch photos; buyers never get the photos
+      const sale = (await http(stack, "GET", "/web/seller/state", undefined, { Authorization: `Bearer ${seller}` })).json.sales[0];
+      expect(sale).toMatchObject({ dealId, verdict: "VERIFIED", before: { presence: "present" }, after: { presence: "absent" }, presenceEvents: 1, payoutMinor: 95_00 - 4_75 });
+      expect(sale.checkInAt).toBeGreaterThan(0);
+      const photo = await stack.app.fetch(new Request(`http://stoop.test/web/frame/${dealId}/before`, { headers: { Authorization: `Bearer ${seller}` } }));
+      expect(photo.status).toBe(200);
+      expect(Buffer.from(await photo.arrayBuffer()).toString()).toContain("ITEM");
+      expect((await http(stack, "GET", `/web/frame/${dealId}/before`, undefined, { Authorization: `Bearer ${buyer}` })).status).toBe(401);
+      const mine = (await http(stack, "GET", `/web/buyer/state?listing=${listingId}`, undefined, { Authorization: `Bearer ${buyer}` })).json.deals[0];
+      expect(mine).toMatchObject({ dealId, passId, state: "INSPECTION", active: true });
+
+      // a new phone takes over as the camera; the old page is told it was replaced
+      const next = (await http(stack, "POST", "/web/cam/register", { fresh: true }, { Authorization: `Bearer ${seller}` })).json as { camera: string; camToken: string };
+      expect(next.camera).not.toBe(cam);
+      run.on = false;
+      await camLoop;
+      expect((await http(stack, "GET", "/web/cam/next", undefined, camAuth)).status).toBe(410);
+      expect((await http(stack, "POST", "/web/cam/frame", { dataUrl: img("x") }, camAuth)).status).toBe(410);
+      expect((await http(stack, "GET", "/web/cam/next", undefined, { Authorization: `Bearer ${next.camToken}` })).status).toBe(200);
     } finally {
       run.on = false;
       stack.stop();

@@ -1,16 +1,16 @@
-# Stoop hosted mode: landing page, guided tour and a private sandbox per visitor, on one port.
+# Stoop hosted mode: the web app (real shops, each a private world) and the Alexa+ device tour, on one port.
 #   docker build -t stoop .
 #   docker run -p 8080:8080 -e ADMIN_KEY=change-me -v stoop-data:/data stoop
-# Public testers get offline agents. For the judge instance add -e LLM_MODE=bedrock and AWS
-# credentials (an instance role on AWS).
+# Without LLM_MODE=bedrock the agents run offline (catalog photos only). On AWS add
+# -e LLM_MODE=bedrock -e LLM_DAILY_CALL_CAP=... and an instance role with Bedrock access.
 FROM node:22-slim AS build
 WORKDIR /app
 ENV CI=true
 RUN corepack enable
 COPY . .
-# Only what hosted mode needs: the stack and its workspace deps, the three apps, the cards
+# Only what hosted mode needs: the stack and its workspace deps, the four apps, the cards
 RUN pnpm install --frozen-lockfile \
-      --filter "@stoop/stack..." --filter "@stoop/alexa-sim..." --filter "@stoop/pass..." \
+      --filter "@stoop/stack..." --filter "@stoop/web..." --filter "@stoop/alexa-sim..." --filter "@stoop/pass..." \
       --filter "@stoop/ops..." --filter "@stoop/ui-cards..." \
  && pnpm build:web
 

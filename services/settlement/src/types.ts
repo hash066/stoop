@@ -102,6 +102,8 @@ export interface Negotiation {
   /** Highest acceptable buyer offer awaiting the seller. */
   pendingAmountMinor?: number;
   pendingApprovalId?: string;
+  /** When the buyer was first told they're talking to an AI assistant. */
+  disclosedAt?: number;
   strikes: number;
   version: number;
   createdAt: number;

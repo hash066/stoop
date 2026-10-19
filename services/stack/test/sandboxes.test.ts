@@ -60,7 +60,7 @@ describe("hosted sandboxes", () => {
     expect(page.status).toBe(404);
     expect(await page.text()).toMatch(/expired/);
     const api = await call("/s/nope/mcp/seller", { method: "POST", body: "{}" });
-    expect(await api.json()).toEqual({ error: "sandbox_expired" });
+    expect(await api.json()).toMatchObject({ error: "sandbox_expired" });
   });
 
   it("limits sandboxes per IP and in total", async () => {
@@ -85,6 +85,57 @@ describe("hosted sandboxes", () => {
     expect(rows[1].email).toBe("b@example.com");
     expect((await call("/api/feedback.jsonl?key=wrong")).status).toBe(403);
     expect(await (await call("/api/feedback.jsonl?key=k")).text()).toContain("love it");
+  });
+
+  const SHOP = { displayName: "Ana", address: "12 Elm St, Springfield, IL", zip: "62704", porchInstructions: "On the bench" };
+
+  it("opens a real shop: no demo data, the seller's own token, no demo or operator routes", async () => {
+    const { call } = await server();
+    const bad = await call("/api/shops", { method: "POST", body: JSON.stringify({ displayName: "Ana" }) });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { fields: string[] }).fields).toEqual(expect.arrayContaining(["address", "zip"]));
+    const shop = (await (await call("/api/shops", { method: "POST", body: JSON.stringify(SHOP) })).json()) as { id: string; sellerToken: string; url: string };
+    expect(shop.url).toBe(`/shop/${shop.id}`);
+    expect(shop.sellerToken).toMatch(/^sk_/);
+    const state = await (await call(`/s/${shop.id}/web/seller/state`, { headers: { Authorization: `Bearer ${shop.sellerToken}` } })).json();
+    expect(state).toMatchObject({ shop: { displayName: "Ana", zip: "62704", camera: null }, items: [], offers: [], sales: [] });
+    expect(JSON.stringify(state)).not.toMatch(/Elm St/);
+    // the demo household and its tokens don't exist in a real shop
+    expect(await spoken(await call(`/s/${shop.id}/mcp/seller`, tool("my_items")))).not.toMatch(/You have/);
+    // nor do the simulator, the operator console (it shows pass codes) or the demo photos
+    for (const path of ["/ops/state", "/ops/events", "/ops/frame/x/before", "/sim/scene", "/ring/devices", "/api/config", "/sweep/demo"])
+      expect((await call(`/s/${shop.id}${path}`, { method: path.startsWith("/sim") || path.startsWith("/sweep") ? "POST" : "GET", body: path.startsWith("/sim") || path.startsWith("/sweep") ? "{}" : undefined })).status, path).toBe(404);
+    // and nobody can set up a second household in it
+    expect((await call(`/s/${shop.id}/web/shop`, { method: "POST", body: JSON.stringify(SHOP) })).status).toBe(404);
+    expect(await (await call(`/s/${shop.id}/web/storefront`)).json()).toMatchObject({ displayName: "Ana", zip: "62704", listings: [] });
+  });
+
+  it("keeps shops for days, demos for minutes, and counts only shops actually opened per address", async () => {
+    let t = 5_000_000;
+    const { s, call } = await server({ now: () => t, idleMs: 60_000, shopIdleMs: 3 * 60_000, shopsPerIpPerHour: 2 });
+    const open = (body: unknown) => call("/api/shops", { method: "POST", ip: "5.5.5.5", body: JSON.stringify(body) });
+    expect((await open({ displayName: "x" })).status).toBe(400); // a typo doesn't use up the limit
+    const a = (await (await open(SHOP)).json()) as { id: string };
+    expect((await open(SHOP)).status).toBe(200);
+    expect((await open(SHOP)).status).toBe(429);
+    t += 61_000;
+    s.sweep();
+    expect(s.worlds.has(a.id)).toBe(true);
+    t += 3 * 60_000;
+    s.sweep();
+    expect(s.worlds.has(a.id)).toBe(false);
+    expect((await call(`/s/${a.id}/web/storefront`)).status).toBe(404);
+  });
+
+  it("answers the web app's own pages with the app, and other paths with 404", async () => {
+    const { call } = await server();
+    for (const path of ["/", "/sell", "/shop/abc", "/shop/abc/item/lst_1", "/shop/abc/p/pass_1", "/shop/abc/camera"]) {
+      const r = await call(path);
+      expect([200, 503], path).toContain(r.status); // 503 = app not built in this checkout
+      expect(r.headers.get("content-type") ?? "").toMatch(/text\/(html|plain)/);
+    }
+    expect((await call("/nope")).status).toBe(404);
+    expect((await call("/demo")).status).toBe(200);
   });
 
   it("retires worlds idle past the limit", async () => {
