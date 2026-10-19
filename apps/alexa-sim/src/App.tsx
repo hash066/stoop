@@ -198,7 +198,16 @@ export function App() {
       setMode("thinking");
       try {
         const tools = mcp.tools.filter((t) => ((t._meta as any)?.ui?.visibility ?? ["model", "app"]).includes("model")).map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
-        const plan = await (await fetch(`${STACK}/planner/turn`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ utterance: u, state: state.current, tools }) })).json();
+        // one retry on a transient proxy error (a CDN can answer with an HTML 502 page); never parse that as JSON
+        const askPlanner = async () => {
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const r = await fetch(`${STACK}/planner/turn`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ utterance: u, state: state.current, tools }) });
+            if (r.ok && (r.headers.get("content-type") ?? "").includes("json")) return r.json();
+            await new Promise((res) => setTimeout(res, 500));
+          }
+          throw new Error("planner unavailable");
+        };
+        const plan = await askPlanner();
         const spoken: string[] = [];
         if (plan.say && !plan.calls?.length) spoken.push(plan.say);
         for (const c of plan.calls ?? []) {

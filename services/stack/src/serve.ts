@@ -9,6 +9,7 @@
 //   MAX_SANDBOXES        concurrent worlds (default 60), SANDBOX_IDLE_MIN (default 30)
 //   LLM_MODE=bedrock     live models for every sandbox (the judge instance); unset = offline agents
 import { serve } from "@hono/node-server";
+import type { Server } from "node:http";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSandboxServer } from "./sandboxes.ts";
@@ -26,9 +27,13 @@ const server = await createSandboxServer({
   idleMs: Number(process.env.SANDBOX_IDLE_MIN ?? 30) * 60_000,
 });
 
-serve({ fetch: server.app.fetch, port, hostname: "0.0.0.0" }, () => {
+const http = serve({ fetch: server.app.fetch, port, hostname: "0.0.0.0" }, () => {
   console.log(`Stoop hosted sandboxes on :${port} (LLM_MODE=${process.env.LLM_MODE ?? "offline"}, max ${process.env.MAX_SANDBOXES ?? 60} sandboxes)`);
-});
+}) as Server;
+// CloudFront reuses origin connections for up to 60 s. Node closes idle ones after 5 s by default,
+// so CloudFront would sometimes send a request down a closing socket and answer 502. Outlast it.
+http.keepAliveTimeout = 65_000;
+http.headersTimeout = 66_000;
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, () => {
