@@ -12,7 +12,12 @@ export function Feedback({ role, shop, step }: { role: "seller" | "buyer" | "vis
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState("");
 
-  if (state === "sent") return <p className="lede" role="status">Thank you. We read every one.</p>;
+  if (state === "sent")
+    return (
+      <p className="note" role="status">
+        Thank you. We read every one.
+      </p>
+    );
 
   return (
     <form
@@ -61,7 +66,7 @@ export function Feedback({ role, shop, step }: { role: "seller" | "buyer" | "vis
         </div>
       </fieldset>
       <label className="field">
-        <span>What was confusing, or what would make you trust it?</span>
+        <span className="label">What was confusing, or what would make you trust it?</span>
         <textarea className="input" name="comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={2000} autoComplete="off" />
       </label>
       <label className="check">
@@ -70,7 +75,7 @@ export function Feedback({ role, shop, step }: { role: "seller" | "buyer" | "vis
       </label>
       {consent ? (
         <label className="field">
-          <span>Email</span>
+          <span className="label">Email</span>
           <input className="input" type="email" name="email" autoComplete="email" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
       ) : null}
@@ -80,7 +85,7 @@ export function Feedback({ role, shop, step }: { role: "seller" | "buyer" | "vis
         </p>
       ) : null}
       <div>
-        <button className="btn ink" type="submit" disabled={state === "sending"}>
+        <button className="btn dark" type="submit" disabled={state === "sending"}>
           {state === "sending" ? "Sending…" : "Send Feedback"}
         </button>
       </div>

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { act, api, ApiError, base, clock, dollars, isPhone, money, tokens, toJpeg } from "../api.ts";
+import { act, api, ApiError, base, clock, dollars, isPhone, money, request, tokens, toJpeg } from "../api.ts";
 import { ApprovalPrompt, Composer, Thread, useConversation } from "../conversation.tsx";
-import { Bar, Check, Closed, CopyButton, Link, navigate, QR, ShareButton, Spinner, usePoll, useTitle, useToast } from "../ui.tsx";
+import { Alert, Camera, Check, Phone, Qr, Receipt, Spark, Upload, Voice } from "../icons.tsx";
+import { Closed, CopyButton, initials, Link, Loading, navigate, Nav, QR, ShareButton, Spinner, usePoll, useTitle, useToast } from "../ui.tsx";
 import { Feedback } from "./Feedback.tsx";
 
 interface ShopItem {
@@ -64,6 +65,10 @@ interface SellerState {
   sales: Sale[];
 }
 
+const PAID_OUT = ["CAPTURED", "PAYOUT_RECORDED", "CLOSED"];
+const cfg = (window as { __STOOP__?: { alexaSkill?: boolean } }).__STOOP__ ?? {};
+const buyerName = (label: string) => label.replace(/ \(.*\)$/, "");
+
 export function Shop({ shop }: { shop: string }) {
   const asBuyer = new URLSearchParams(location.search).get("view") === "buyer";
   const token = tokens.get("seller", shop);
@@ -88,100 +93,134 @@ function Dashboard({ shop, token }: { shop: string; token: string }) {
   useTitle(st ? `${offers ? `(${offers}) ` : ""}${st.shop.displayName}’s shop` : "Your shop");
 
   if (closed) return <Closed />;
-  if (!st) return <Spinner label="Opening your shop…" />;
+  if (!st) return <Loading label="Opening your shop…" />;
 
   const unlisted = st.items.filter((i) => !i.blocked && (!i.listing || ["AWAITING_SELLER_OK", "RELISTED", "WITHDRAWN", "EXPIRED"].includes(i.listing.state)));
   const live = st.items.filter((i) => i.listing?.state === "LIVE");
   const blocked = st.items.filter((i) => i.blocked);
   const activeSales = st.sales.filter((s) => s.active);
   const pastSales = st.sales.filter((s) => !s.active);
+  const earned = st.sales.filter((s) => PAID_OUT.includes(s.state)).reduce((t, s) => t + s.payoutMinor, 0);
   const camOn = !!st.shop.camera?.online;
   const needsCam = !camOn && (live.length > 0 || activeSales.length > 0);
+  const photoFor = (listingId: string) => st.items.find((i) => i.listing?.id === listingId)?.photoUrl;
 
   return (
     <>
-      <a className="skip btn ink" href="#main">
+      <a className="skip btn dark" href="#main">
         Skip to Content
       </a>
-      <Bar right={<Link to={`/shop/${shop}?view=buyer`}>See It as a Buyer</Link>} />
-      <main id="main" className="page" style={{ paddingBottom: 72 }}>
-        <header className="stack-s" style={{ paddingBlock: "8px 32px" }}>
-          <h1 style={{ fontSize: "var(--t-l)" }}>{st.shop.displayName}’s shop</h1>
-          <p className="meta">
-            Porch pickup in {st.shop.zip}. {st.shop.porchInstructions}
-          </p>
+      <Nav
+        right={
+          <Link to={`/shop/${shop}?view=buyer`} className="btn ghost sm">
+            See It as a Buyer
+          </Link>
+        }
+      />
+      <main id="main" className="page" style={{ paddingBottom: 80 }}>
+        <header className="app-head grid-2" style={{ alignItems: "center" }}>
+          <div className="row" style={{ gap: 16, flexWrap: "nowrap" }}>
+            <span className="avatar lg sun" aria-hidden="true">
+              {initials(st.shop.displayName)}
+            </span>
+            <div>
+              <h1 style={{ fontSize: "var(--t-xl)" }}>{st.shop.displayName}’s shop</h1>
+              <p className="muted small">
+                Porch pickup in {st.shop.zip} · {st.shop.porchInstructions}
+              </p>
+            </div>
+          </div>
+          <div className="stats">
+            <div className="stat-tile">
+              <span className="tiny">For sale</span>
+              <b className="num">{live.length}</b>
+            </div>
+            <div className="stat-tile" style={offers ? { background: "var(--sun)" } : undefined}>
+              <span className="tiny" style={offers ? { color: "var(--ink)" } : undefined}>
+                Offers
+              </span>
+              <b className="num">{offers}</b>
+            </div>
+            <div className="stat-tile">
+              <span className="tiny">Earned</span>
+              <b className="num">{money(earned)}</b>
+            </div>
+          </div>
         </header>
-        <div className="split">
-          <div className="col">
-            {st.offers.length ? <Offers shop={shop} token={token} offers={st.offers} onDone={refresh} toast={toast} /> : null}
+
+        <div className="grid-2">
+          <div className="stack" style={{ ["--gap" as string]: "20px" }}>
+            {st.offers.length ? <Offers shop={shop} token={token} offers={st.offers} photoFor={photoFor} onDone={refresh} toast={toast} /> : null}
             {needsCam ? (
               <p className="note warn">
-                Your porch camera is off. Without it, you and the buyer confirm each pickup yourselves. <a href="#camera">Turn it on</a>
+                <Alert />
+                <span>
+                  Your porch camera is off. Without it, you and the buyer confirm each pickup yourselves. <a href="#camera">Turn it on</a>
+                </span>
               </p>
             ) : null}
-            {activeSales.length ? (
-              <section className="stack" aria-labelledby="sales-h">
-                <h2 id="sales-h">Sales in progress</h2>
-                <div className="rows">
-                  {activeSales.map((s) => (
-                    <SaleRow key={s.dealId} shop={shop} token={token} sale={s} porch={st.shop.porchInstructions} camOn={camOn} onDone={refresh} toast={toast} />
-                  ))}
-                </div>
-              </section>
-            ) : null}
-            <section className="stack" aria-labelledby="items-h">
+            {activeSales.map((s) => (
+              <SaleCard key={s.dealId} shop={shop} token={token} sale={s} photo={photoFor(s.listingId)} porch={st.shop.porchInstructions} camOn={camOn} onDone={refresh} toast={toast} />
+            ))}
+
+            <section className="card stack" aria-labelledby="items-h">
               <div className="spread">
-                <h2 id="items-h">{st.items.length ? "Your things" : "What are you selling?"}</h2>
+                <h2 id="items-h" style={{ fontSize: "var(--t-l)" }}>
+                  {st.items.length ? "Your things" : "What are you selling?"}
+                </h2>
+                {st.items.length ? <span className="tiny">One photo per thing, up to 8 at a time</span> : null}
               </div>
               <AddPhotos shop={shop} token={token} first={!st.items.length} onDone={refresh} toast={toast} />
-              {unlisted.length ? (
-                <div className="rows">
-                  {unlisted.map((it) => (
-                    <ListForm key={it.itemId} shop={shop} token={token} item={it} onDone={refresh} toast={toast} />
-                  ))}
-                </div>
-              ) : null}
+              {unlisted.map((it) => (
+                <ListForm key={it.itemId} shop={shop} token={token} item={it} onDone={refresh} toast={toast} />
+              ))}
               {live.length ? (
-                <div className="stack">
+                <div className="stack-s">
                   <h3>For sale now</h3>
-                  <div className="rows">
+                  <div className="item-grid">
                     {live.map((it) => (
-                      <LiveRow key={it.itemId} shop={shop} item={it} />
+                      <LiveCard key={it.itemId} shop={shop} item={it} />
                     ))}
                   </div>
                 </div>
               ) : null}
               {blocked.map((it) => (
-                <div key={it.itemId} className="item">
-                  {it.photoUrl ? <img className="thumb" src={it.photoUrl} alt="" width={96} height={96} /> : <div className="thumb" />}
-                  <div className="item-body">
+                <div key={it.itemId} className="list-form">
+                  {it.photoUrl ? <img className="photo" src={it.photoUrl} alt="" width={132} height={132} /> : <div className="photo" />}
+                  <div className="stack-s">
                     <h3>{it.title}</h3>
                     <p className="note bad">
-                      {it.blockedReason ?? "This can’t be sold on Stoop."} {it.alternative ?? ""}
+                      <Alert />
+                      <span>
+                        {it.blockedReason ?? "This can’t be sold on Stoop."} {it.alternative ?? ""}
+                      </span>
                     </p>
                   </div>
                 </div>
               ))}
             </section>
-            {st.conversations.length ? <Conversations list={st.conversations} /> : null}
+
             {pastSales.length ? (
-              <section className="stack" aria-labelledby="past-h">
-                <h2 id="past-h">Past sales</h2>
-                <div className="rows">
-                  {pastSales.map((s) => (
-                    <SaleRow key={s.dealId} shop={shop} token={token} sale={s} porch={st.shop.porchInstructions} camOn={camOn} onDone={refresh} toast={toast} />
-                  ))}
-                </div>
+              <section className="card stack" aria-labelledby="past-h">
+                <h2 id="past-h" style={{ fontSize: "var(--t-l)" }}>
+                  Past sales
+                </h2>
+                {pastSales.map((s) => (
+                  <SaleCard key={s.dealId} shop={shop} token={token} sale={s} photo={photoFor(s.listingId)} porch={st.shop.porchInstructions} camOn={camOn} onDone={refresh} toast={toast} flat />
+                ))}
               </section>
             ) : null}
+            {st.conversations.length ? <Conversations list={st.conversations} /> : null}
           </div>
-          <aside className="col">
+
+          <aside className="stack" style={{ ["--gap" as string]: "16px" }}>
             <CameraPanel shop={shop} token={token} camera={st.shop.camera} />
+            {cfg.alexaSkill ? <AlexaPanel shop={shop} token={token} /> : null}
             <SharePanel shop={shop} name={st.shop.displayName} hasLive={live.length > 0} />
             <AssistantPanel shop={shop} token={token} onChange={refresh} />
             <OtherDevice shop={shop} token={token} />
-            <details className="stack-s">
-              <summary className="sum small">Tell us how it’s going</summary>
+            <details className="card stack">
+              <summary>Tell us how it’s going</summary>
               <Feedback role="seller" shop={shop} />
             </details>
           </aside>
@@ -199,11 +238,12 @@ function AddPhotos({ shop, token, first, onDone, toast }: { shop: string; token:
   const [status, setStatus] = useState("");
   const [err, setErr] = useState("");
   const [unknown, setUnknown] = useState(0);
+  const [over, setOver] = useState(false);
   const busy = !!status;
 
-  const upload = async (files: FileList | null) => {
-    if (!files?.length) return;
-    const list = [...files].slice(0, 8);
+  const upload = async (files: FileList | File[] | null) => {
+    const list = [...(files ?? [])].filter((f) => f.type.startsWith("image/")).slice(0, 8);
+    if (!list.length) return;
     setErr("");
     setUnknown(0);
     try {
@@ -211,7 +251,7 @@ function AddPhotos({ shop, token, first, onDone, toast }: { shop: string; token:
       const photos = await Promise.all(list.map(async (f, i) => ({ name: f.name || `photo-${i + 1}.jpg`, dataUrl: await toJpeg(f) })));
       setStatus("Uploading…");
       await api(shop, "/sweep", { token, body: { photos } });
-      setStatus(`Identifying and pricing ${list.length === 1 ? "your photo" : `${list.length} photos`}. This takes a few seconds each…`);
+      setStatus(`The AI is identifying and pricing ${list.length === 1 ? "your photo" : `${list.length} photos`}. A few seconds each…`);
       const r = await act(shop, "seller", token, "appraise_photos", {});
       if (r.isError) setErr(r.text);
       else {
@@ -228,19 +268,36 @@ function AddPhotos({ shop, token, first, onDone, toast }: { shop: string; token:
   };
 
   return (
-    <div className={first ? "tone stack" : "stack-s"}>
-      {first ? <p className="lede">Take one photo per thing, in good light, with the whole thing in view. Stoop names it, checks it isn’t recalled and suggests a price.</p> : null}
+    <div className="stack-s">
       <input ref={input} type="file" accept="image/*" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => void upload(e.target.files)} />
-      <div className="row">
-        <button type="button" className={first ? "btn big" : "btn quiet"} disabled={busy} onClick={() => input.current?.click()}>
-          {busy ? "Working…" : first ? "Add Photos" : "Add More Photos"}
-        </button>
-        {!first ? <span className="meta">One photo per thing. Up to 8 at a time.</span> : null}
-      </div>
+      <button
+        type="button"
+        className={`drop${over ? " over" : ""}`}
+        disabled={busy}
+        onClick={() => input.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setOver(false);
+          void upload([...e.dataTransfer.files]);
+        }}
+        style={first ? undefined : { padding: "20px" }}
+      >
+        <Upload />
+        <span style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: first ? "1.375rem" : "1.125rem" }}>{busy ? "Working…" : first ? "Add Photos of What You’re Selling" : "Add More Photos"}</span>
+        <span className="small" style={{ color: "var(--green-3)" }}>
+          {first ? "One photo per thing, in good light, whole thing in view. Drop them here or tap to choose." : "Drop photos here or tap to choose"}
+        </span>
+      </button>
       {status ? <Spinner label={status} /> : null}
       {unknown ? (
         <p className="note">
-          Stoop couldn’t tell what’s in {unknown === 1 ? "one photo" : `${unknown} photos`}. Try a closer shot with the whole thing in view.
+          <Camera />
+          <span>Stoop couldn’t tell what’s in {unknown === 1 ? "one photo" : `${unknown} photos`}. Try a closer shot with the whole thing in view.</span>
         </p>
       ) : null}
       {err ? (
@@ -255,9 +312,9 @@ function AddPhotos({ shop, token, first, onDone, toast }: { shop: string; token:
 const CONDITION = { A: "Like new", B: "Light wear", C: "Visible wear", D: "For parts" } as const;
 
 function priceNote(it: ShopItem) {
-  if (it.priceSource === "comps") return `Suggested from ${it.comps} similar sale${it.comps === 1 ? "" : "s"}.`;
-  if (it.priceSource === "ai-estimate") return "AI estimate from your photo. Check it against similar listings near you.";
-  return "No price suggestion for this one. Set your own.";
+  if (it.priceSource === "comps") return `From ${it.comps} similar sale${it.comps === 1 ? "" : "s"}`;
+  if (it.priceSource === "ai-estimate") return "AI estimate: check it against listings near you";
+  return "No suggestion: set your own";
 }
 
 function ListForm({ shop, token, item, onDone, toast }: { shop: string; token: string; item: ShopItem; onDone(): void; toast(t: string): void }) {
@@ -272,7 +329,8 @@ function ListForm({ shop, token, item, onDone, toast }: { shop: string; token: s
 
   return (
     <form
-      className="item"
+      className="list-form card flat"
+      style={{ padding: 16 }}
       onSubmit={async (e) => {
         e.preventDefault();
         if (!p) return setErr("Set a price.");
@@ -297,28 +355,33 @@ function ListForm({ shop, token, item, onDone, toast }: { shop: string; token: s
         }
       }}
     >
-      {item.photoUrl ? <img className="thumb" src={item.photoUrl} alt="" width={96} height={96} /> : <div className="thumb" />}
-      <div className="item-body">
-        <h3>{item.title}</h3>
-        <p className="meta">
-          {CONDITION[item.condition]}. {priceNote(item)}
-        </p>
+      {item.photoUrl ? <img className="photo" src={item.photoUrl} alt="" width={132} height={132} /> : <div className="photo" />}
+      <div className="stack" style={{ ["--gap" as string]: "14px" }}>
+        <div className="stack-s">
+          <div className="row" style={{ gap: 8 }}>
+            <span className="badge">
+              <Spark /> {CONDITION[item.condition]}
+            </span>
+            <span className={`badge ${item.priceSource === "comps" ? "" : "sun"}`}>{priceNote(item)}</span>
+          </div>
+          <h3>{item.title}</h3>
+        </div>
         <div className="row" style={{ alignItems: "flex-end" }}>
           <label className="field" style={{ flex: "1 1 120px", maxWidth: 170 }}>
-            <span>Price</span>
+            <span className="label">Price</span>
             <span className="money">
               <input className="input" inputMode="decimal" autoComplete="off" name={`price-${id}`} value={price} onChange={(e) => setPrice(e.target.value)} />
             </span>
           </label>
           <label className="field" style={{ flex: "1 1 120px", maxWidth: 170 }}>
-            <span>Lowest you’ll take</span>
+            <span className="label">Lowest you’ll take</span>
             <span className="money">
               <input className="input" inputMode="decimal" autoComplete="off" name={`lowest-${id}`} value={lowest} onChange={(e) => setLowest(e.target.value)} />
             </span>
           </label>
         </div>
-        <p className="meta">Buyers never see your lowest price. The assistant haggles above it and asks you before accepting less than your price.</p>
-        <label className="check">
+        <p className="tiny">Buyers never see your lowest price. The AI haggles above it and asks you before accepting less than your price.</p>
+        <label className="check small">
           <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
           <span>Sell right away to anyone who offers the full price</span>
         </label>
@@ -327,9 +390,11 @@ function ListForm({ shop, token, item, onDone, toast }: { shop: string; token: s
             {err}
           </p>
         ) : null}
-        <button className="btn" type="submit" disabled={busy}>
-          {busy ? "Listing…" : p ? `List It at ${money(Math.round(p * 100))}` : "List It"}
-        </button>
+        <div>
+          <button className="btn lg" type="submit" disabled={busy}>
+            {busy ? "Listing…" : p ? `List It at ${money(Math.round(p * 100))}` : "List It"}
+          </button>
+        </div>
       </div>
     </form>
   );
@@ -337,41 +402,40 @@ function ListForm({ shop, token, item, onDone, toast }: { shop: string; token: s
 
 const itemUrl = (shop: string, listingId: string) => `${location.origin}/shop/${shop}/item/${listingId}`;
 
-function LiveRow({ shop, item }: { shop: string; item: ShopItem }) {
+function LiveCard({ shop, item }: { shop: string; item: ShopItem }) {
   const [qr, setQr] = useState(false);
   const url = itemUrl(shop, item.listing!.id);
   return (
-    <div className="item">
-      {item.photoUrl ? <img className="thumb" src={item.photoUrl} alt="" width={96} height={96} /> : <div className="thumb" />}
-      <div className="item-body">
-        <div className="spread">
-          <h3>{item.title}</h3>
-          <span className="num" style={{ fontWeight: 800, fontSize: "var(--t-m)" }}>
-            {money(item.listing!.askMinor)}
-          </span>
-        </div>
-        <p className="meta">
-          For sale.{" "}
-          <a href={url} target="_blank" rel="noreferrer">
-            Open the listing
-          </a>
-        </p>
-        <div className="row">
-          <CopyButton text={url} />
-          <ShareButton url={url} title={item.title} />
-          <button type="button" className="btn quiet" aria-expanded={qr} onClick={() => setQr(!qr)}>
-            {qr ? "Hide QR Code" : "QR Code"}
-          </button>
-        </div>
-        {qr ? <QR text={url} label={`QR code for the ${item.title} listing`} /> : null}
+    <div className="item-card card flat" style={{ padding: 12 }}>
+      {item.photoUrl ? <img className="photo" src={item.photoUrl} alt="" width={400} height={300} /> : <div className="photo" />}
+      <div className="spread" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}>
+        <h3 style={{ fontSize: "var(--t-b)" }}>{item.title}</h3>
+        <span className="price" style={{ fontSize: "1.375rem" }}>
+          {money(item.listing!.askMinor)}
+        </span>
       </div>
+      <div className="row" style={{ gap: 8 }}>
+        <span className="badge">
+          <span className="dot live" /> For sale
+        </span>
+        <a className="tiny" href={url} target="_blank" rel="noreferrer">
+          Open listing
+        </a>
+      </div>
+      <div className="row" style={{ gap: 8 }}>
+        <CopyButton text={url} className="btn ghost sm" />
+        <button type="button" className="btn ghost sm" aria-expanded={qr} onClick={() => setQr(!qr)}>
+          <Qr /> {qr ? "Hide" : "QR"}
+        </button>
+      </div>
+      {qr ? <QR text={url} label={`QR code for the ${item.title} listing`} /> : null}
     </div>
   );
 }
 
 // ---------- offers
 
-function Offers({ shop, token, offers, onDone, toast }: { shop: string; token: string; offers: Offer[]; onDone(): void; toast(t: string): void }) {
+function Offers({ shop, token, offers, photoFor, onDone, toast }: { shop: string; token: string; offers: Offer[]; photoFor(id: string): string | undefined; onDone(): void; toast(t: string): void }) {
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const respond = async (o: Offer, decision: "accept" | "decline") => {
@@ -389,25 +453,34 @@ function Offers({ shop, token, offers, onDone, toast }: { shop: string; token: s
     }
   };
   return (
-    <section className="tone stack" aria-labelledby="offers-h" style={{ background: "color-mix(in oklab, var(--accent) 34%, var(--ground))" }}>
-      <h2 id="offers-h">{offers.length === 1 ? "An offer is waiting" : `${offers.length} offers are waiting`}</h2>
+    <section className="card attn stack" aria-labelledby="offers-h">
+      <div className="row" style={{ gap: 10 }}>
+        <span className="dot live" style={{ color: "var(--sun)", width: 10, height: 10 }} />
+        <h2 id="offers-h" style={{ fontSize: "var(--t-l)" }}>
+          {offers.length === 1 ? "You have an offer" : `You have ${offers.length} offers`}
+        </h2>
+      </div>
       {offers.map((o) => {
         const fee = Math.round(o.amountMinor * 0.05);
+        const photo = photoFor(o.listingId);
         return (
-          <div key={o.approvalId} className="stack-s">
-            <p className="lede">
-              {o.buyer} offers <strong className="num">{money(o.amountMinor)}</strong> for the {o.title}.
-            </p>
-            <p className="meta">
-              You asked {money(o.askMinor)}. You’d get {money(o.amountMinor - fee)} after Stoop’s 5% fee, paid once the pickup is verified.
-            </p>
-            <div className="row">
-              <button className="btn ink" type="button" disabled={!!busy} onClick={() => void respond(o, "accept")}>
-                Accept {money(o.amountMinor)}
-              </button>
-              <button className="btn quiet" type="button" disabled={!!busy} onClick={() => void respond(o, "decline")}>
-                Decline
-              </button>
+          <div key={o.approvalId} className="row" style={{ alignItems: "flex-start", gap: 16, flexWrap: "nowrap" }}>
+            {photo ? <img className="thumb" src={photo} alt="" width={72} height={72} /> : null}
+            <div className="stack-s" style={{ flex: 1 }}>
+              <p style={{ fontSize: "var(--t-m)" }}>
+                <strong>{buyerName(o.buyer)}</strong> offers <span className="price" style={{ fontSize: "1.75rem" }}>{money(o.amountMinor)}</span> for the {o.title}.
+              </p>
+              <p className="tiny">
+                You asked {money(o.askMinor)}. You’d get {money(o.amountMinor - fee)} after Stoop’s 5% fee, paid once the pickup is verified.
+              </p>
+              <div className="row">
+                <button className="btn dark" type="button" disabled={!!busy} onClick={() => void respond(o, "accept")}>
+                  <Check /> Accept {money(o.amountMinor)}
+                </button>
+                <button className="btn ghost" type="button" disabled={!!busy} onClick={() => void respond(o, "decline")}>
+                  Decline
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -423,20 +496,22 @@ function Offers({ shop, token, offers, onDone, toast }: { shop: string; token: s
 
 function Conversations({ list }: { list: Conversation[] }) {
   return (
-    <details className="stack">
-      <summary className="sum">What your assistant said to buyers</summary>
-      <div className="rows" style={{ marginTop: 18 }}>
+    <details className="card stack">
+      <summary>What your AI assistant said to buyers</summary>
+      <div className="stack" style={{ marginTop: 18 }}>
         {list.map((c, i) => (
           <div key={i} className="stack-s">
-            <h3>
-              {c.title}, with {c.buyer.replace(/ \(.*\)$/, "")}
-            </h3>
-            <div className="thread">
+            <h4>
+              {c.title} · {buyerName(c.buyer)}
+            </h4>
+            <div className="chat">
               {c.offers.map((o, j) => (
-                <div key={j} className={`msg${o.by === "seller" ? " me" : ""}`}>
-                  {o.message || money(o.amountMinor)}
-                  <div className="meta num">
-                    {o.by === "seller" ? "Your assistant" : "Buyer"}, {money(o.amountMinor)}, {clock(o.at)}
+                <div key={j} className={`bubble-row${o.by === "seller" ? "" : " me"}`}>
+                  <div className="bubble small">
+                    {o.message || money(o.amountMinor)}
+                    <span className="who" style={o.by === "buyer" ? { color: "rgb(255 255 255 / 0.7)" } : undefined}>
+                      {o.by === "seller" ? "Your assistant" : "Buyer"} · {money(o.amountMinor)} · {clock(o.at)}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -454,16 +529,17 @@ const REACHED: Record<string, string[]> = {
   paid: ["FUNDS_HELD", "PASS_ISSUED", "WINDOW_OPEN", "STILL_THERE", "VERIFIED", "INSPECTION", "REVIEW", "DEGRADED", "DUAL_CONFIRMED", "CAPTURED", "PAYOUT_RECORDED", "CLOSED", "DISPUTE", "NO_SHOW", "PIRACY_SUSPECTED"],
   window: ["WINDOW_OPEN", "STILL_THERE", "VERIFIED", "INSPECTION", "REVIEW", "DEGRADED", "DUAL_CONFIRMED", "CAPTURED", "PAYOUT_RECORDED", "CLOSED", "DISPUTE", "NO_SHOW", "PIRACY_SUSPECTED"],
   picked: ["VERIFIED", "INSPECTION", "DUAL_CONFIRMED", "CAPTURED", "PAYOUT_RECORDED", "CLOSED"],
-  paidOut: ["CAPTURED", "PAYOUT_RECORDED", "CLOSED"],
+  paidOut: PAID_OUT,
 };
 
-function SaleRow({ shop, token, sale, porch, camOn, onDone, toast }: { shop: string; token: string; sale: Sale; porch: string; camOn: boolean; onDone(): void; toast(t: string): void }) {
+function SaleCard(p: { shop: string; token: string; sale: Sale; photo?: string; porch: string; camOn: boolean; onDone(): void; toast(t: string): void; flat?: boolean }) {
+  const { shop, token, sale } = p;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [cancelAsk, setCancelAsk] = useState(false);
   const been = (k: keyof typeof REACHED) => REACHED[k]!.includes(sale.state) || sale.history.some((h) => REACHED[k]!.includes(h.state));
   const steps: Array<{ label: string; sub?: string; done: boolean }> = [
-    { label: `Accepted at ${money(sale.amountMinor)}`, sub: sale.buyer, done: true },
+    { label: `Accepted at ${money(sale.amountMinor)}`, sub: buyerName(sale.buyer), done: true },
     { label: "Buyer paid", sub: been("paidOut") ? `${money(sale.amountMinor)}, charged once the pickup was verified` : `${money(sale.amountMinor)} held, not charged yet`, done: been("paid") },
     {
       label: sale.window ? `Pickup window, until ${clock(sale.window.end)}` : "Pickup window",
@@ -481,8 +557,8 @@ function SaleRow({ shop, token, sale, porch, camOn, onDone, toast }: { shop: str
     setErr("");
     try {
       await fn();
-      toast(ok);
-      onDone();
+      p.toast(ok);
+      p.onDone();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "That didn’t go through.");
     } finally {
@@ -498,37 +574,59 @@ function SaleRow({ shop, token, sale, porch, camOn, onDone, toast }: { shop: str
   if (sale.state === "FUNDS_HELD" || sale.state === "PASS_ISSUED" || (sale.state === "WINDOW_OPEN" && !sale.checkInAt && sale.before?.presence !== "present"))
     note = (
       <p className="note warn">
-        Put the {sale.title} out now: {porch.replace(/\.$/, "")}.{camOn ? "" : " Turn your porch camera on, too."}
+        <Alert />
+        <span>
+          Put the {sale.title} out now: {p.porch.replace(/\.$/, "")}.{p.camOn ? "" : " Turn your porch camera on, too."}
+        </span>
       </p>
     );
-  if (sale.state === "STILL_THERE") note = <p className="note warn">The buyer checked in, but the camera still sees the item. It checks again when there’s movement.</p>;
+  if (sale.state === "STILL_THERE")
+    note = (
+      <p className="note warn">
+        <Alert />
+        <span>The buyer checked in, but the camera still sees the item. It checks again when there’s movement.</span>
+      </p>
+    );
   if (sale.state === "REVIEW" || sale.state === "DEGRADED")
     note = (
-      <div className="note warn stack-s">
+      <div className="note warn" style={{ display: "grid" }}>
         <p>The camera couldn’t confirm this pickup, so you both confirm. Once you both do, the payment goes through.</p>
         {sale.dual.seller ? (
-          <p className="meta">You confirmed. Waiting for the buyer.</p>
+          <p className="small">You confirmed. Waiting for the buyer.</p>
         ) : (
-          <button className="btn ink" type="button" disabled={busy} onClick={() => void run(() => tool("confirm_pickup"), "Thanks. Waiting for the buyer to confirm too.")}>
-            The Buyer Has It
-          </button>
+          <div>
+            <button className="btn dark" type="button" disabled={busy} onClick={() => void run(() => tool("confirm_pickup"), "Thanks. Waiting for the buyer to confirm too.")}>
+              The Buyer Has It
+            </button>
+          </div>
         )}
       </div>
     );
   if (sale.state === "NO_SHOW") note = <p className="note">The buyer didn’t come. Their hold was released and the item is for sale again.</p>;
-  if (sale.state === "PIRACY_SUSPECTED") note = <p className="note bad">The item left the porch without the buyer checking in, so they weren’t charged. If that wasn’t them, the camera’s photos are below.</p>;
+  if (sale.state === "PIRACY_SUSPECTED")
+    note = (
+      <p className="note bad">
+        <Alert />
+        <span>The item left the porch without the buyer checking in, so they weren’t charged. The camera’s photos are below.</span>
+      </p>
+    );
   if (["VOIDED", "SELLER_CANCELLED", "CHECKOUT_ABANDONED"].includes(sale.state)) note = <p className="note">This sale didn’t happen. Nobody was charged.</p>;
   if (sale.state === "DISPUTE") note = <p className="note bad">The buyer reported a problem. The payment stays held while it’s reviewed.</p>;
   if (sale.state === "INSPECTION") note = <p className="note">Picked up. The buyer has two hours to check it, then the payment goes through.</p>;
 
   const canCancel = ["AGREED", "CHECKOUT_OPEN", "FUNDS_HELD", "PASS_ISSUED", "WINDOW_OPEN"].includes(sale.state) && !sale.checkInAt;
   const canRetake = sale.state === "WINDOW_OPEN" && !sale.checkInAt && sale.before && sale.before.presence !== "present";
+  const done = PAID_OUT.includes(sale.state);
 
   return (
-    <article className="stack-s" aria-label={`Sale of the ${sale.title}`}>
-      <div className="spread">
-        <h3>{sale.title}</h3>
-        <span className="num" style={{ fontWeight: 800 }}>
+    <article className={p.flat ? "stack" : "card stack"} aria-label={`Sale of the ${sale.title}`} style={p.flat ? { paddingTop: 18, borderTop: "1px solid var(--line)" } : undefined}>
+      <div className="row" style={{ gap: 14, flexWrap: "nowrap" }}>
+        {p.photo ? <img className="thumb" src={p.photo} alt="" width={72} height={72} /> : null}
+        <div style={{ flex: 1 }}>
+          <span className={`badge ${done ? "" : sale.active ? "sun" : "gray"}`}>{done ? "Sold" : sale.active ? "Sale in progress" : "Ended"}</span>
+          <h3 style={{ marginTop: 6 }}>{sale.title}</h3>
+        </div>
+        <span className="price" style={{ fontSize: "1.75rem" }}>
           {money(sale.amountMinor)}
         </span>
       </div>
@@ -536,10 +634,10 @@ function SaleRow({ shop, token, sale, porch, camOn, onDone, toast }: { shop: str
       <ol className="path">
         {steps.map((s, i) => (
           <li key={s.label} data-state={s.done ? "done" : i === nowIdx ? "now" : "todo"}>
-            <span className="dot">{s.done ? <Check /> : null}</span>
+            <span className="step-dot">{s.done ? <Check /> : null}</span>
             <span>
               <strong>{s.label}</strong>
-              {s.sub ? <span className="meta" style={{ display: "block" }}>{s.sub}</span> : null}
+              {s.sub ? <span className="tiny" style={{ display: "block" }}>{s.sub}</span> : null}
             </span>
           </li>
         ))}
@@ -552,19 +650,19 @@ function SaleRow({ shop, token, sale, porch, camOn, onDone, toast }: { shop: str
       ) : null}
       <div className="row">
         {canRetake ? (
-          <button className="btn quiet" type="button" disabled={busy} onClick={() => void run(() => api(shop, `/web/sale/${sale.dealId}/before`, { token, body: {} }), "Looking at the porch again…")}>
-            It’s Out Now, Look Again
+          <button className="btn soft" type="button" disabled={busy} onClick={() => void run(() => api(shop, `/web/sale/${sale.dealId}/before`, { token, body: {} }), "Looking at the porch again…")}>
+            <Camera /> It’s Out Now, Look Again
           </button>
         ) : null}
         {sale.receiptId ? (
-          <a className="btn quiet" href={`${base(shop)}/verify/${sale.receiptId}`} target="_blank" rel="noreferrer">
-            Signed Receipt
+          <a className="btn soft" href={`${base(shop)}/verify/${sale.receiptId}`} target="_blank" rel="noreferrer">
+            <Receipt /> Signed Receipt
           </a>
         ) : null}
         {canCancel ? (
           cancelAsk ? (
             <>
-              <button className="btn quiet" type="button" disabled={busy} onClick={() => void run(() => tool("cancel_sale"), "Cancelled. The buyer’s hold was released.")}>
+              <button className="btn danger" type="button" disabled={busy} onClick={() => void run(() => tool("cancel_sale"), "Cancelled. The buyer’s hold was released.")}>
                 Yes, Cancel the Sale
               </button>
               <button className="link" type="button" onClick={() => setCancelAsk(false)}>
@@ -572,7 +670,7 @@ function SaleRow({ shop, token, sale, porch, camOn, onDone, toast }: { shop: str
               </button>
             </>
           ) : (
-            <button className="link" type="button" onClick={() => setCancelAsk(true)}>
+            <button className="link tiny" type="button" onClick={() => setCancelAsk(true)}>
               Cancel this sale
             </button>
           )
@@ -611,12 +709,12 @@ function Frames({ shop, token, sale }: { shop: string; token: string; sale: Sale
   if (!urls.before && !urls.after) return null;
   const word = (p?: string) => (p === "present" ? "item there" : p === "absent" ? "item gone" : "unclear");
   return (
-    <div className="row" style={{ alignItems: "flex-start" }}>
+    <div className="row" style={{ alignItems: "flex-start", gap: 12 }}>
       {(["before", "after"] as const).map((k) =>
         urls[k] ? (
-          <figure key={k} style={{ margin: 0, width: 168 }}>
-            <img className="photo" src={urls[k]} alt={`Porch ${k} the pickup`} width={168} height={126} />
-            <figcaption className="meta num">
+          <figure key={k} style={{ margin: 0, width: 180 }}>
+            <img className="photo" src={urls[k]} alt={`Porch ${k} the pickup`} width={180} height={135} style={{ borderRadius: 14 }} />
+            <figcaption className="tiny" style={{ marginTop: 6 }}>
               {k === "before" ? "Before" : "After"}, {clock(sale[k]!.at)}: {word(sale[k]!.presence)}
             </figcaption>
           </figure>
@@ -642,36 +740,41 @@ function CameraPanel({ shop, token, camera }: { shop: string; token: string; cam
     }
   };
   return (
-    <section id="camera" className="tone stack" aria-labelledby="cam-h">
+    <section id="camera" className="card cam-tile stack" aria-labelledby="cam-h">
       <div className="spread">
-        <h2 id="cam-h" style={{ fontSize: "var(--t-m)" }}>
-          Porch camera
-        </h2>
-        <span className="live" data-on={on}>
-          {on ? "On" : "Off"}
+        <div className="row" style={{ gap: 10 }}>
+          <span className="step-n" style={{ background: "rgb(255 255 255 / 0.1)", color: "var(--sun)" }}>
+            <Camera />
+          </span>
+          <h2 id="cam-h" style={{ fontSize: "var(--t-m)" }}>
+            Porch camera
+          </h2>
+        </div>
+        <span className={`badge ${on ? "sun" : "dark"}`}>
+          <span className={`dot${on ? " live" : ""}`} /> {on ? "On" : "Off"}
         </span>
       </div>
-      <p className="meta">
+      <p className="muted small">
         {on
           ? camera?.lastFrameAt
             ? `Last photo at ${clock(camera.lastFrameAt)}. Keep that page open while you have things for sale.`
             : "Connected. Keep that page open while you have things for sale."
-          : "An old phone or a laptop at a window that sees where you leave things. It checks that the item is there before a pickup and gone after."}
+          : "An old phone or a laptop at a window that sees where you leave things. It checks the item is there before a pickup and gone after."}
       </p>
       {link ? (
         <div className="stack-s">
           <QR text={link} label="QR code that opens the porch camera page on your phone" />
-          <p className="meta">Scan with the phone you’ll leave at the window. The link only works as this shop’s camera.</p>
-          <CopyButton text={link} label="Copy Camera Link" />
+          <p className="tiny">Scan with the phone you’ll leave at the window. The link only works as this shop’s camera.</p>
+          <CopyButton text={link} label="Copy Camera Link" className="btn on-dark sm" />
         </div>
       ) : (
         <div className="row">
           {isPhone() ? null : (
-            <button className={on ? "btn quiet" : "btn"} type="button" onClick={() => void phoneLink()}>
-              {on ? "Move It to Another Phone" : "Use Your Phone"}
+            <button className={on ? "btn on-dark" : "btn"} type="button" onClick={() => void phoneLink()}>
+              <Phone /> {on ? "Move to Another Phone" : "Use Your Phone"}
             </button>
           )}
-          <button className={isPhone() && !on ? "btn" : "btn quiet"} type="button" onClick={() => navigate(`/shop/${shop}/camera`)}>
+          <button className={isPhone() && !on ? "btn" : "btn on-dark"} type="button" onClick={() => navigate(`/shop/${shop}/camera`)}>
             {on ? "Use This Device Instead" : "Use This Device"}
           </button>
         </div>
@@ -685,17 +788,66 @@ function CameraPanel({ shop, token, camera }: { shop: string; token: string; cam
   );
 }
 
+/** Link this shop to the seller's Alexa: a 6-digit code they say to the Stoop skill. */
+function AlexaPanel({ shop, token }: { shop: string; token: string }) {
+  const [code, setCode] = useState<string>();
+  const [err, setErr] = useState("");
+  const get = async () => {
+    setErr("");
+    try {
+      setCode((await request<{ code: string }>("/api/alexa/pair", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shop, token }) })).code);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn’t get a code. Try again.");
+    }
+  };
+  return (
+    <section className="card green stack" aria-labelledby="alexa-h">
+      <div className="row" style={{ gap: 10 }}>
+        <span className="step-n">
+          <Voice />
+        </span>
+        <h2 id="alexa-h" style={{ fontSize: "var(--t-m)", color: "#fff" }}>
+          Talk to your shop on Alexa
+        </h2>
+      </div>
+      {code ? (
+        <div className="stack-s">
+          <p className="small">Say “Alexa, open stoop shop”, then tell it this code:</p>
+          <p className="countdown num" style={{ color: "var(--sun)", letterSpacing: "0.08em" }} aria-label={`Code ${code.split("").join(" ")}`}>
+            {code.slice(0, 3)} {code.slice(3)}
+          </p>
+          <p className="tiny">It works once, for the next 10 minutes. After that, try “Alexa, ask stoop shop if I have any offers.”</p>
+        </div>
+      ) : (
+        <>
+          <p className="muted small">Hear offers, say yes to a sale and check on a pickup from any Echo or the Alexa app.</p>
+          <div>
+            <button className="btn" type="button" onClick={() => void get()}>
+              Get a Code
+            </button>
+          </div>
+        </>
+      )}
+      {err ? (
+        <p className="err" role="alert">
+          {err}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 function SharePanel({ shop, name, hasLive }: { shop: string; name: string; hasLive: boolean }) {
   const url = `${location.origin}/shop/${shop}`;
   return (
-    <section className="stack-s" aria-labelledby="share-h">
+    <section className="card sun stack-s" aria-labelledby="share-h">
       <h2 id="share-h" style={{ fontSize: "var(--t-m)" }}>
         Share your shop
       </h2>
-      <p className="meta">{hasLive ? "Send this to neighbors, a group chat or a local buy-and-sell group. People buy from the link." : "Once something is for sale, share this link."}</p>
+      <p className="small">{hasLive ? "Send it to neighbors, a group chat or a local buy-and-sell group. People buy from the link." : "Once something is for sale, share this link."}</p>
       <div className="row">
-        <CopyButton text={url} label="Copy Shop Link" />
-        <ShareButton url={url} title={`${name}’s shop on Stoop`} />
+        <CopyButton text={url} label="Copy Shop Link" className="btn dark" />
+        <ShareButton url={url} title={`${name}’s shop on Stoop`} className="btn ghost" />
       </div>
     </section>
   );
@@ -705,20 +857,22 @@ function OtherDevice({ shop, token }: { shop: string; token: string }) {
   const [show, setShow] = useState(false);
   const url = `${location.origin}/shop/${shop}#sk=${token}`;
   return (
-    <section className="stack-s" aria-labelledby="dev-h">
-      <h2 id="dev-h" style={{ fontSize: "var(--t-m)" }}>
+    <section className="card flat stack-s" aria-labelledby="dev-h">
+      <h2 id="dev-h" style={{ fontSize: "var(--t-b)" }}>
         Manage from another device
       </h2>
-      <p className="meta">Anyone with this private link can run your shop. Don’t share it.</p>
+      <p className="tiny">Anyone with this private link can run your shop. Don’t share it.</p>
       {show ? (
         <div className="stack-s">
           <QR text={url} label="QR code that opens this shop’s dashboard on another device" />
-          <CopyButton text={url} label="Copy Private Link" />
+          <CopyButton text={url} label="Copy Private Link" className="btn ghost sm" />
         </div>
       ) : (
-        <button className="btn quiet" type="button" onClick={() => setShow(true)}>
-          Show Private Link
-        </button>
+        <div>
+          <button className="btn ghost sm" type="button" onClick={() => setShow(true)}>
+            Show Private Link
+          </button>
+        </div>
       )}
     </section>
   );
@@ -727,35 +881,51 @@ function OtherDevice({ shop, token }: { shop: string; token: string }) {
 function AssistantPanel({ shop, token, onChange }: { shop: string; token: string; onChange(): void }) {
   const conv = useConversation({ shop, role: "seller", token, storeKey: `stoop:thread:${shop}:seller`, context: {}, onChange });
   return (
-    <section className="stack-s" aria-labelledby="ask-h">
-      <h2 id="ask-h" style={{ fontSize: "var(--t-m)" }}>
-        Ask Stoop
-      </h2>
-      <p className="meta">Type or talk, the way you would to Alexa: “Any offers?” or “Don’t take less than $90 for the stroller.”</p>
-      <Thread lines={conv.lines.slice(-8)} />
-      {conv.approval ? <ApprovalPrompt a={conv.approval} busy={conv.busy} onAnswer={(d) => void conv.answer(d)} /> : null}
+    <section className="card stack" aria-labelledby="ask-h">
+      <div className="row" style={{ gap: 10 }}>
+        <span className="step-n" style={{ background: "var(--sun)", color: "var(--ink)" }}>
+          <Spark />
+        </span>
+        <div>
+          <h2 id="ask-h" style={{ fontSize: "var(--t-m)" }}>
+            Ask Stoop
+          </h2>
+          <p className="tiny">Type or talk, like you would to Alexa.</p>
+        </div>
+      </div>
+      {conv.lines.length ? (
+        <Thread lines={conv.lines.slice(-8)} typing={conv.busy && !conv.pending} />
+      ) : (
+        <div className="row" style={{ gap: 8 }}>
+          {["Any offers?", "How’s my sale going?", "What am I selling?"].map((q) => (
+            <button key={q} type="button" className="btn ghost sm" disabled={conv.busy} onClick={() => void conv.say(q)}>
+              “{q}”
+            </button>
+          ))}
+        </div>
+      )}
+      {conv.pending ? <ApprovalPrompt a={conv.pending} onAnswer={(d, c) => conv.answer(d, c)} /> : null}
       <Composer onSay={(t, aloud) => void conv.say(t, aloud)} busy={conv.busy} label="Ask Stoop" placeholder="Ask Stoop…" />
-      {conv.busy ? <Spinner label="Working…" /> : null}
     </section>
   );
 }
 
 // ======================================================================== buyers: the storefront
 
-interface Storefront {
+interface StorefrontData {
   displayName: string;
   zip: string;
   listings: Array<{ id: string; title: string; askMinor: number; state: string; photoUrl?: string }>;
 }
 
 function Storefront({ shop, preview }: { shop: string; preview: boolean }) {
-  const [sf, setSf] = useState<Storefront>();
+  const [sf, setSf] = useState<StorefrontData>();
   const [closed, setClosed] = useState(false);
-  useTitle(sf ? `${sf.displayName}’s shop` : "Shop");
+  useTitle(sf ? `${sf.displayName}’s porch` : "Shop");
   usePoll(
     async () => {
       try {
-        setSf(await api<Storefront>(shop, "/web/storefront"));
+        setSf(await api<StorefrontData>(shop, "/web/storefront"));
       } catch (e) {
         if (e instanceof ApiError && e.status === 404) setClosed(true);
       }
@@ -764,32 +934,52 @@ function Storefront({ shop, preview }: { shop: string; preview: boolean }) {
     [shop],
   );
   if (closed) return <Closed />;
-  if (!sf) return <Spinner label="Loading…" />;
+  if (!sf) return <Loading />;
   const live = sf.listings.filter((l) => l.state === "LIVE");
   return (
     <>
-      <Bar right={preview ? <Link to={`/shop/${shop}`}>Back to Your Shop</Link> : <Link to="/sell">Sell Your Own Things</Link>} />
-      <main id="main" className="page" style={{ paddingBottom: 72 }}>
-        <header className="stack-s" style={{ paddingBlock: "8px 36px" }}>
-          <h1 style={{ fontSize: "var(--t-l)" }}>{sf.displayName}’s porch</h1>
-          <p className="meta">Contactless pickup in {sf.zip}. Pay first; you’re only charged once your pickup is verified.</p>
+      <Nav
+        right={
+          preview ? (
+            <Link to={`/shop/${shop}`} className="btn dark sm">
+              Back to Your Shop
+            </Link>
+          ) : (
+            <Link to="/sell" className="btn sm">
+              Sell Your Own Things
+            </Link>
+          )
+        }
+      />
+      <main id="main" className="page" style={{ paddingBottom: 80 }}>
+        <header className="app-head row" style={{ gap: 16, flexWrap: "nowrap" }}>
+          <span className="avatar lg sun" aria-hidden="true">
+            {initials(sf.displayName)}
+          </span>
+          <div>
+            <h1 style={{ fontSize: "var(--t-xl)" }}>{sf.displayName}’s porch</h1>
+            <p className="muted small">Contactless pickup in {sf.zip}. Pay first; you’re only charged once your pickup is verified.</p>
+          </div>
         </header>
         {live.length ? (
-          <div className="steps" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))" }}>
+          <div className="item-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))" }}>
             {live.map((l, i) => (
-              <Link key={l.id} to={`/shop/${shop}/item/${l.id}`} className="tile stack-s in" style={{ ["--i" as string]: i }}>
+              <Link key={l.id} to={`/shop/${shop}/item/${l.id}`} className="item-card card in" style={{ ["--i" as string]: i, padding: 12 }}>
                 {l.photoUrl ? <img className="photo" src={l.photoUrl} alt="" width={400} height={300} loading="lazy" /> : <div className="photo" />}
-                <span className="spread">
-                  <strong>{l.title}</strong>
-                  <span className="num" style={{ fontWeight: 800 }}>
+                <div className="spread" style={{ flexWrap: "nowrap", alignItems: "flex-start", padding: "0 4px 4px" }}>
+                  <h3 style={{ fontSize: "var(--t-b)" }}>{l.title}</h3>
+                  <span className="price" style={{ fontSize: "1.375rem" }}>
                     {money(l.askMinor)}
                   </span>
-                </span>
+                </div>
               </Link>
             ))}
           </div>
         ) : (
-          <p className="lede">Nothing for sale right now. Check back soon.</p>
+          <div className="card stack-s" style={{ textAlign: "center", padding: 48 }}>
+            <h2 style={{ fontSize: "var(--t-l)" }}>Nothing for sale right now.</h2>
+            <p className="muted">Check back soon.</p>
+          </div>
         )}
       </main>
     </>

@@ -41,6 +41,8 @@ export async function elicitConfirm(
   extra: Extra,
   message: string,
   extraFields: Record<string, FormField> = {},
+  /** What the approval is about (e.g. the checkout breakdown), for hosts that render it natively. */
+  card?: Record<string, unknown>,
 ): Promise<{ action: "accept" | "decline" | "cancel"; content?: Record<string, unknown> }> {
   const required = ["confirm", ...Object.keys(extraFields)];
   const res = await extra.sendRequest(
@@ -49,6 +51,7 @@ export async function elicitConfirm(
       params: {
         mode: "form",
         message,
+        ...(card ? { _meta: { "io.stoop/card": card } } : {}),
         requestedSchema: {
           type: "object",
           properties: { confirm: { type: "boolean", title: "Approve", default: true }, ...extraFields },
@@ -146,7 +149,7 @@ export async function withApproval(opts: {
       : {};
     let ans;
     try {
-      ans = await elicitConfirm(opts.extra, opts.summary, fields);
+      ans = await elicitConfirm(opts.extra, opts.summary, fields, opts.cardData);
     } catch {
       ans = undefined; // client errored or timed out -> fall back to Path B
     }

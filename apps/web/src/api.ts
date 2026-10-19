@@ -1,5 +1,8 @@
-// Talking to a shop's world (/s/<shop>/…): plain JSON routes, and the same MCP tools an Alexa+
-// device calls (stateless JSON-RPC over Streamable HTTP).
+// Talking to a shop's world (/s/<shop>/…): plain JSON routes for state, and the same MCP tools an
+// Alexa+ device calls, through the official MCP TypeScript SDK client.
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { ElicitRequestSchema, type CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 export class ApiError extends Error {
   constructor(
@@ -61,53 +64,112 @@ export interface ToolResult {
   isError: boolean;
 }
 
-let rpcId = 0;
-export async function tool(shop: string, role: "seller" | "buyer", token: string, name: string, args: Record<string, unknown> = {}): Promise<ToolResult> {
-  const res = await fetch(`${base(shop)}/mcp/${role}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
-      "MCP-Protocol-Version": "2025-11-25",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method: "tools/call", params: { name, arguments: args } }),
-  });
-  if (!res.ok && res.status !== 200) {
-    const b = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-    throw new ApiError(res.status, b.error ?? `http_${res.status}`, b.message ?? friendly(res.status, b.error));
+// One MCP session per shop, role and token, through the official TypeScript SDK (spec 2025-11-25,
+// Streamable HTTP). The app declares form and URL elicitation, so a tool that needs a person's yes
+// asks for it in the middle of the call (elicitation/create) and the app answers with the person's tap.
+
+export interface Approval {
+  message: string;
+  /** The purchase needs the buyer's 4-digit code (over $100, as on a voice assistant). */
+  needsCode: boolean;
+  /** What is being approved (e.g. the checkout breakdown), sent by the server in the request's _meta. */
+  card?: Record<string, any>;
+  mode: "form" | "url";
+  url?: string;
+}
+export type ApprovalAnswer = { action: "accept" | "decline" | "cancel"; content?: Record<string, unknown> };
+export type Approver = (a: Approval) => Promise<ApprovalAnswer>;
+
+interface Session {
+  client: Client;
+  queue: Promise<unknown>;
+  approver?: Approver;
+}
+const sessions = new Map<string, Promise<Session>>();
+
+function session(shop: string, role: "seller" | "buyer", token: string): Promise<Session> {
+  const key = `${shop}|${role}|${token}`;
+  let s = sessions.get(key);
+  if (!s) {
+    s = (async () => {
+      const client = new Client({ name: "stoop-web", version: "1.0.0", title: "Stoop web app" }, { capabilities: { elicitation: { form: {}, url: {} } } });
+      const out: Session = { client, queue: Promise.resolve() };
+      client.setRequestHandler(ElicitRequestSchema, async (req) => {
+        const p = req.params as { mode?: "form" | "url"; message: string; url?: string; requestedSchema?: { properties?: Record<string, unknown> }; _meta?: Record<string, any> };
+        const ask: Approval = { message: p.message, needsCode: !!p.requestedSchema?.properties?.voiceCode, card: p._meta?.["io.stoop/card"], mode: p.mode ?? "form", url: p.url };
+        // nobody is there to answer (e.g. a background call): say no rather than guess
+        const a = out.approver ? await out.approver(ask) : { action: "decline" as const };
+        return ask.mode === "url" ? { action: a.action } : a;
+      });
+      const transport = new StreamableHTTPClientTransport(new URL(`${location.origin}${base(shop)}/mcp/${role}`), { requestInit: { headers: { Authorization: `Bearer ${token}` } } });
+      await client.connect(transport);
+      return out;
+    })();
+    s.catch(() => sessions.delete(key));
+    sessions.set(key, s);
   }
-  const raw = await res.text();
-  const json = raw.trimStart().startsWith("{") ? raw : (raw.split("\n").find((l) => l.startsWith("data:")) ?? "data:{}").slice(5);
-  const msg = JSON.parse(json) as { result?: { content?: Array<{ type: string; text?: string }>; structuredContent?: Record<string, any>; isError?: boolean }; error?: { message: string } };
-  if (msg.error) throw new ApiError(500, "rpc", msg.error.message);
-  const text = (msg.result?.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join(" ");
-  return { text, data: msg.result?.structuredContent ?? {}, isError: !!msg.result?.isError };
+  return s;
+}
+
+function toResult(r: CallToolResult): ToolResult {
+  const text = (r.content as Array<{ type: string; text?: string }>).filter((c) => c.type === "text").map((c) => c.text ?? "").join(" ");
+  return { text, data: (r.structuredContent as Record<string, any>) ?? {}, isError: !!r.isError };
+}
+
+/** Call one MCP tool. `approver` answers any approval the tool asks for during the call. */
+export async function tool(shop: string, role: "seller" | "buyer", token: string, name: string, args: Record<string, unknown> = {}, approver?: Approver): Promise<ToolResult> {
+  for (let attempt = 0; ; attempt++) {
+    let s: Session;
+    try {
+      s = await session(shop, role, token);
+    } catch (e) {
+      throw mcpError(e);
+    }
+    // one call at a time per session, so an approval prompt belongs to the call that asked for it
+    const run = async () => {
+      s.approver = approver;
+      try {
+        return toResult((await s.client.callTool({ name, arguments: args }, undefined, { timeout: 6 * 60_000 })) as CallToolResult);
+      } finally {
+        s.approver = undefined;
+      }
+    };
+    const p = s.queue.then(run, run);
+    s.queue = p.catch(() => undefined);
+    try {
+      return await p;
+    } catch (e) {
+      // the server forgot this session (restart): start a new one, once
+      if (attempt === 0 && /session|404|not found/i.test(String(e))) {
+        sessions.delete(`${shop}|${role}|${token}`);
+        continue;
+      }
+      throw mcpError(e);
+    }
+  }
+}
+
+function mcpError(e: unknown) {
+  const s = String(e instanceof Error ? e.message : e);
+  if (/sandbox_expired/.test(s)) return new ApiError(404, "sandbox_expired", "This shop has closed.");
+  if (/401|unauthorized/i.test(s)) return new ApiError(401, "unauthorized", "You don’t have access to that.");
+  if (/fetch|network/i.test(s)) return new ApiError(0, "network", "You seem to be offline. Check your connection and try again.");
+  return new ApiError(500, "mcp", "Something went wrong on our side. Try again in a moment.");
 }
 
 /**
  * Run a tool the person just asked for with a button that names the exact terms ("List It at $120").
- * That click is their yes, so an approval the tool asks for is answered with it, with the purchase
- * code when the purchase needs one.
+ * That click is their yes, so the approval the tool asks for is answered with it (and with the
+ * purchase code, when the purchase needs one).
  */
-export async function act(shop: string, role: "seller" | "buyer", token: string, name: string, args: Record<string, unknown> = {}, voiceCode?: string): Promise<ToolResult> {
-  const r = await tool(shop, role, token, name, args);
-  if (r.data.kind === "approval_required" && r.data.pendingActionId) {
-    return tool(shop, role, token, "confirm_action", { approvalId: r.data.pendingActionId, decision: "accept", ...(voiceCode ? { voiceCode } : {}) });
-  }
-  return r;
+export function act(shop: string, role: "seller" | "buyer", token: string, name: string, args: Record<string, unknown> = {}, voiceCode?: string): Promise<ToolResult> {
+  return tool(shop, role, token, name, args, async (a) => (a.needsCode && !voiceCode ? { action: "decline" } : { action: "accept", content: { confirm: true, ...(a.needsCode ? { voiceCode } : {}) } }));
 }
 
 export async function listTools(shop: string, role: "seller" | "buyer", token: string) {
-  const res = await fetch(`${base(shop)}/mcp/${role}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "MCP-Protocol-Version": "2025-11-25", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method: "tools/list", params: {} }),
-  });
-  const raw = await res.text();
-  const json = raw.trimStart().startsWith("{") ? raw : (raw.split("\n").find((l) => l.startsWith("data:")) ?? "data:{}").slice(5);
-  const msg = JSON.parse(json) as { result?: { tools?: Array<{ name: string; description?: string; inputSchema?: unknown; _meta?: any }> } };
-  return (msg.result?.tools ?? []).filter((t) => (t._meta?.ui?.visibility ?? ["model", "app"]).includes("model")).map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
+  const s = await session(shop, role, token);
+  const { tools } = await s.client.listTools();
+  return tools.filter((t) => (((t._meta as any)?.ui?.visibility as string[]) ?? ["model", "app"]).includes("model")).map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
 }
 
 // ---------- tokens and this device

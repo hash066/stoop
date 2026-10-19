@@ -1,9 +1,10 @@
-import "@fontsource-variable/schibsted-grotesk";
+import "@fontsource-variable/bricolage-grotesque";
+import "@fontsource-variable/geist";
 import "./styles.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { absorbFragment } from "./api.ts";
-import { Bar, Link, usePath } from "./ui.tsx";
+import { Link, Nav, usePath } from "./ui.tsx";
 import { Camera } from "./pages/Camera.tsx";
 import { Item } from "./pages/Item.tsx";
 import { Landing } from "./pages/Landing.tsx";
@@ -26,11 +27,11 @@ function App() {
   if (path === "/" || path === "") return <Landing />;
   return (
     <>
-      <Bar />
+      <Nav />
       <main id="main" className="page section stack">
-        <h1 style={{ fontSize: "var(--t-l)" }}>There’s nothing here.</h1>
+        <h1 style={{ fontSize: "var(--t-xl)" }}>There’s nothing here.</h1>
         <p>
-          <Link to="/" className="btn">
+          <Link to="/" className="btn lg">
             Go to Stoop
           </Link>
         </p>

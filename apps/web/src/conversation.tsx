@@ -1,9 +1,9 @@
-// The assistant conversation: what you type or say goes to the same planner and MCP tools an
-// Alexa+ device uses. Approvals the tools ask for show up here and need your tap (and your purchase
-// code when a purchase needs one).
+// The assistant conversation. What you type or say goes to the same planner and MCP tools an Alexa+
+// device uses. When a tool needs your yes, the server asks mid-call (MCP elicitation) and the
+// question shows up here; your tap (and purchase code, when a purchase needs one) is the answer.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, base, listTools, money, request, tool, type ToolResult } from "./api.ts";
-import { Mic, Send } from "./ui.tsx";
+import { ApiError, base, listTools, money, request, tool, type Approval, type ApprovalAnswer, type ToolResult } from "./api.ts";
+import { Mic, Send, Spark } from "./icons.tsx";
 import { listenOnce, speak, speechSupported, stopSpeaking } from "./voice.ts";
 
 export interface Line {
@@ -11,19 +11,17 @@ export interface Line {
   text: string;
   at: number;
 }
-export interface Approval {
-  id: string;
-  summary: string;
-  needsCode: boolean;
-  card?: Record<string, any>;
-}
 export interface PlannerContext {
   activeListingId?: string;
   lastListingIds?: string[];
   activeDealId?: string;
 }
+interface Pending {
+  ask: Approval;
+  resolve(a: ApprovalAnswer): void;
+}
 
-/** Tools the assistant may use on a page (the pass and photos have their own buttons). */
+/** Tools the assistant may use on a page (photos and the pickup pass have their own buttons). */
 const ALLOW = {
   buyer: new Set(["get_listing", "make_offer", "ask_seller", "checkout", "confirm_action", "order_status"]),
   seller: new Set(["my_items", "list_items", "set_mandate", "review_offers", "respond_to_offer", "set_pickup_preferences", "handoff_status", "get_receipt", "confirm_pickup", "cancel_sale", "confirm_action"]),
@@ -37,12 +35,14 @@ export function useConversation(o: { shop: string; role: "seller" | "buyer"; tok
       return [];
     }
   });
-  const [approval, setApproval] = useState<Approval>();
+  const [pending, setPending] = useState<Pending>();
   const [busy, setBusy] = useState(false);
   const tools = useRef<Awaited<ReturnType<typeof listTools>>>(undefined);
   const ctx = useRef(o.context);
   ctx.current = { ...ctx.current, ...o.context };
   const pendingOffer = useRef<string>(undefined);
+  const onChange = useRef(o.onChange);
+  onChange.current = o.onChange;
 
   useEffect(() => {
     localStorage.setItem(o.storeKey, JSON.stringify(lines.slice(-60)));
@@ -50,19 +50,18 @@ export function useConversation(o: { shop: string; role: "seller" | "buyer"; tok
 
   const add = useCallback((l: Omit<Line, "at">) => setLines((x) => [...x, { ...l, at: Date.now() }]), []);
 
-  /** Show a tool result in the conversation; returns the spoken text. */
+  /** A tool asked for a person's yes: show it and wait for their tap. */
+  const approver = useCallback((ask: Approval) => new Promise<ApprovalAnswer>((resolve) => setPending({ ask, resolve })), []);
+
+  /** Show a tool result in the conversation; returns what was said. */
   const absorb = useCallback(
-    (name: string, r: ToolResult) => {
+    (r: ToolResult) => {
       const d = r.data;
-      if (d.kind === "approval_required" && d.pendingActionId) {
-        setApproval({ id: d.pendingActionId, summary: d.summary ?? r.text, needsCode: !!d.needsVoiceCode, card: d.card });
-        return r.text;
-      }
       if (d.kind === "negotiation") {
         ctx.current.activeListingId = d.listingId;
         if (d.dealId) ctx.current.activeDealId = d.dealId;
         add({ who: "seller", text: d.reply ?? r.text });
-        if (d.action === "accepted") add({ who: "stoop", text: `Accepted at ${money(ladderLast(d))}. Pay below to reserve it.` });
+        if (d.action === "accepted") add({ who: "stoop", text: `Accepted at ${money(d.ladder?.at(-1)?.amountMinor ?? d.askMinor)}. Pay below to reserve it.` });
         return d.reply ?? r.text;
       }
       if (d.kind === "offers" && d.offers?.length) pendingOffer.current = d.offers[0].approvalId;
@@ -79,17 +78,22 @@ export function useConversation(o: { shop: string; role: "seller" | "buyer"; tok
     [add, o.role],
   );
 
+  /** Call one tool; any approval it asks for appears in this conversation. */
   const run = useCallback(
     async (name: string, args: Record<string, unknown>) => {
-      const r = await tool(o.shop, o.role, o.token, name, args);
-      const spoken = absorb(name, r);
-      o.onChange?.();
-      return { r, spoken };
+      try {
+        const r = await tool(o.shop, o.role, o.token, name, args, approver);
+        const spoken = absorb(r);
+        onChange.current?.();
+        return { r, spoken };
+      } finally {
+        setPending(undefined);
+      }
     },
-    [absorb, o],
+    [absorb, approver, o.role, o.shop, o.token],
   );
 
-  /** One turn from free text (typed or spoken). */
+  /** One turn from free text (typed or spoken), planned by the same planner an Alexa+ device uses. */
   const say = useCallback(
     async (utterance: string, aloud = false) => {
       const u = utterance.trim();
@@ -102,19 +106,18 @@ export function useConversation(o: { shop: string; role: "seller" | "buyer"; tok
         const plan = await request<{ calls?: Array<{ name: string; args?: Record<string, unknown> }>; say?: string }>(`${base(o.shop)}/planner/turn`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ utterance: u, state: { role: o.role, ...ctx.current, pendingApprovalId: approval?.id, pendingOfferApprovalId: pendingOffer.current }, tools: tools.current }),
+          body: JSON.stringify({ utterance: u, state: { role: o.role, ...ctx.current, pendingOfferApprovalId: pendingOffer.current }, tools: tools.current }),
         });
         const calls = (plan.calls ?? []).filter((c) => ALLOW[o.role].has(c.name));
         if (!calls.length) {
-          const t = plan.say ?? "I can help with offers, questions about the item and paying for it.";
+          const t = plan.say ?? "I can check offers, list things, set your lowest price and follow a sale.";
           add({ who: "stoop", text: t });
           spoken.push(t);
         }
         for (const c of calls) {
-          if (c.name === "confirm_action") setApproval(undefined);
           const { r, spoken: s } = await run(c.name, c.args ?? {});
           spoken.push(s);
-          if (r.data.kind === "approval_required" || r.isError) break;
+          if (r.isError) break;
         }
       } catch (e) {
         add({ who: "stoop", text: e instanceof ApiError ? e.message : "Sorry, that didn’t go through. Try again." });
@@ -123,47 +126,54 @@ export function useConversation(o: { shop: string; role: "seller" | "buyer"; tok
       }
       if (aloud) speak(spoken.join(" "));
     },
-    [add, approval, busy, o.role, o.shop, o.token, run],
+    [add, busy, o.role, o.shop, o.token, run],
   );
 
   const answer = useCallback(
-    async (decision: "accept" | "decline", code?: string) => {
-      if (!approval) return;
-      setBusy(true);
-      try {
-        const r = await tool(o.shop, o.role, o.token, "confirm_action", { approvalId: approval.id, decision, ...(code ? { voiceCode: code } : {}) });
-        setApproval(undefined);
-        absorb("confirm_action", r);
-        o.onChange?.();
-        return r;
-      } catch (e) {
-        add({ who: "stoop", text: e instanceof ApiError ? e.message : "That didn’t go through. Try again." });
-      } finally {
-        setBusy(false);
-      }
+    (decision: "accept" | "decline", code?: string) => {
+      if (!pending) return;
+      pending.resolve(decision === "accept" ? { action: "accept", content: { confirm: true, ...(code ? { voiceCode: code } : {}) } } : { action: "decline", content: { confirm: false } });
+      setPending(undefined);
     },
-    [absorb, add, approval, o],
+    [pending],
   );
 
-  return { lines, add, say, run, approval, setApproval, answer, busy, setBusy };
+  return { lines, add, say, run, pending: pending?.ask, answer, busy, setBusy };
 }
 
-const ladderLast = (d: Record<string, any>) => (d.ladder?.length ? d.ladder[d.ladder.length - 1].amountMinor : d.askMinor);
-
-export function Thread({ lines, sellerName = "Seller’s assistant" }: { lines: Line[]; sellerName?: string }) {
+export function Thread({ lines, typing, sellerName = "Seller’s assistant" }: { lines: Line[]; typing?: boolean; sellerName?: string }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "nearest" });
-  }, [lines.length]);
-  if (!lines.length) return null;
+  }, [lines.length, typing]);
+  if (!lines.length && !typing) return null;
   return (
-    <div className="thread" role="log" aria-live="polite" aria-label="Conversation">
+    <div className="chat" role="log" aria-live="polite" aria-label="Conversation">
       {lines.map((l, i) => (
-        <div key={i} className={`msg${l.who === "me" ? " me" : ""}`}>
-          {l.text}
-          {l.who !== "me" ? <div className="meta">{l.who === "seller" ? sellerName : "Stoop"}</div> : null}
+        <div key={i} className={`bubble-row${l.who === "me" ? " me" : ""}`}>
+          {l.who !== "me" ? (
+            <span className={`avatar${l.who === "stoop" ? " sun" : ""}`} aria-hidden="true">
+              {l.who === "seller" ? "AI" : <Spark width={16} height={16} />}
+            </span>
+          ) : null}
+          <div className="bubble">
+            {l.text}
+            {l.who !== "me" ? <span className="who">{l.who === "seller" ? sellerName : "Stoop"}</span> : null}
+          </div>
         </div>
       ))}
+      {typing ? (
+        <div className="bubble-row">
+          <span className="avatar" aria-hidden="true">
+            AI
+          </span>
+          <span className="typing" aria-label="Typing">
+            <i />
+            <i />
+            <i />
+          </span>
+        </div>
+      ) : null}
       <div ref={end} />
     </div>
   );
@@ -186,7 +196,7 @@ export function Composer({ onSay, busy, placeholder, label }: { onSay(t: string,
       <label className="sr-only" htmlFor="composer">
         {label}
       </label>
-      <input id="composer" className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} autoComplete="off" enterKeyHint="send" disabled={busy} />
+      <input id="composer" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} autoComplete="off" enterKeyHint="send" disabled={busy} />
       {speechSupported() ? (
         <button
           type="button"
@@ -206,63 +216,67 @@ export function Composer({ onSay, busy, placeholder, label }: { onSay(t: string,
             );
           }}
         >
-          <Mic />
+          <Mic width={22} height={22} />
         </button>
       ) : null}
-      <button type="submit" className="icon-btn" aria-label="Send" disabled={busy || !text.trim()}>
-        <Send />
+      <button type="submit" className="icon-btn send" aria-label="Send" disabled={busy || !text.trim()}>
+        <Send width={22} height={22} />
       </button>
     </form>
   );
 }
 
-/** An approval the assistant is waiting on. */
-export function ApprovalPrompt({ a, busy, onAnswer, codeError }: { a: Approval; busy: boolean; onAnswer(d: "accept" | "decline", code?: string): void; codeError?: string }) {
+/** A question a tool is waiting on (MCP elicitation): what's being approved, and the yes or no. */
+export function ApprovalPrompt({ a, onAnswer, codeError }: { a: Approval; onAnswer(d: "accept" | "decline", code?: string): void; codeError?: string }) {
   const [code, setCode] = useState("");
-  const total = a.card?.totalMinor as number | undefined;
+  const card = a.card;
+  const checkout = card?.kind === "checkout";
   return (
     <form
-      className="note warn stack-s"
+      className="card attn stack"
       onSubmit={(e) => {
         e.preventDefault();
         onAnswer("accept", a.needsCode ? code : undefined);
       }}
     >
-      {a.card?.kind === "checkout" ? (
-        <dl className="stack-s num" style={{ margin: 0 }}>
-          <div className="spread">
-            <dt>{a.card.title}</dt>
-            <dd style={{ margin: 0 }}>{money(a.card.itemMinor)}</dd>
-          </div>
-          <div className="spread">
-            <dt>Verified pickup</dt>
-            <dd style={{ margin: 0 }}>{money(a.card.feeMinor)}</dd>
-          </div>
-          <div className="spread">
-            <dt>Tax</dt>
-            <dd style={{ margin: 0 }}>{money(a.card.taxMinor ?? 0)}</dd>
-          </div>
-          <div className="spread" style={{ fontWeight: 800 }}>
-            <dt>Total</dt>
-            <dd style={{ margin: 0 }}>{money(a.card.totalMinor)}</dd>
-          </div>
-          <p className="meta">
+      {checkout ? (
+        <>
+          <h3>Review and pay</h3>
+          <dl className="stack-s num" style={{ margin: 0 }}>
+            {[
+              [card.title, money(card.itemMinor)],
+              ["Verified pickup", money(card.feeMinor)],
+              ["Tax", money(card.taxMinor ?? 0)],
+            ].map(([k, v]) => (
+              <div key={k} className="spread">
+                <dt className="muted">{k}</dt>
+                <dd style={{ margin: 0 }}>{v}</dd>
+              </div>
+            ))}
+            <div className="spread" style={{ paddingTop: 10, borderTop: "1px solid var(--line)" }}>
+              <dt style={{ fontWeight: 700 }}>Total</dt>
+              <dd className="price" style={{ margin: 0, fontSize: "var(--t-l)" }}>
+                {money(card.totalMinor)}
+              </dd>
+            </div>
+          </dl>
+          <p className="tiny">
             Held, not charged, until your pickup is verified. If it isn’t, you’re never charged.{" "}
-            {a.card.refundPolicyUrl ? (
-              <a href={a.card.refundPolicyUrl} target="_blank" rel="noreferrer">
+            {card.refundPolicyUrl ? (
+              <a href={card.refundPolicyUrl} target="_blank" rel="noreferrer">
                 Refund policy
               </a>
             ) : null}
           </p>
-        </dl>
+        </>
       ) : (
-        <p style={{ fontWeight: 600 }}>{a.summary}</p>
+        <p style={{ fontWeight: 600 }}>{a.message}</p>
       )}
       {a.needsCode ? (
         <label className="field">
-          <span>Your 4-digit purchase code</span>
+          <span className="label">Your 4-digit purchase code</span>
           <input className="input" inputMode="numeric" pattern="\d{4}" maxLength={4} autoComplete="off" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} style={{ maxWidth: "10ch" }} required />
-          <small>Purchases over $100 need it, like on a voice assistant.</small>
+          <span className="hint">Purchases over $100 need it, like on a voice assistant.</span>
         </label>
       ) : null}
       {codeError ? (
@@ -271,10 +285,10 @@ export function ApprovalPrompt({ a, busy, onAnswer, codeError }: { a: Approval; 
         </p>
       ) : null}
       <div className="row">
-        <button className="btn" type="submit" disabled={busy || (a.needsCode && code.length !== 4)}>
-          {total ? `Pay ${money(total)}` : "Approve"}
+        <button className="btn lg" type="submit" disabled={a.needsCode && code.length !== 4}>
+          {checkout ? `Pay ${money(card.totalMinor)}` : "Approve"}
         </button>
-        <button className="btn quiet" type="button" disabled={busy} onClick={() => onAnswer("decline")}>
+        <button className="btn ghost lg" type="button" onClick={() => onAnswer("decline")}>
           Cancel
         </button>
       </div>

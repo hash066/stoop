@@ -109,7 +109,7 @@ try {
   await seller.getByRole("button", { name: "Open Shop" }).click();
   await seller.waitForURL(/\/shop\/[A-Za-z0-9_-]+$/);
   const shopId = new URL(seller.url()).pathname.split("/")[2]!;
-  await seller.getByRole("button", { name: "Add Photos" }).waitFor();
+  await seller.getByRole("button", { name: /Add Photos/ }).waitFor();
   await shot(seller, "shop-empty-1440");
 
   step("seller adds a photo; Stoop identifies and prices it");
@@ -120,7 +120,7 @@ try {
   await seller.getByLabel("Sell right away to anyone who offers the full price").uncheck();
   await seller.getByRole("button", { name: /^List It at \$/ }).click();
   await seller.getByRole("heading", { name: "For sale now" }).waitFor({ timeout: 30_000 });
-  const listingUrl = (await seller.getByRole("link", { name: "Open the listing" }).getAttribute("href"))!;
+  const listingUrl = (await seller.getByRole("link", { name: "Open listing" }).getAttribute("href"))!;
   await shot(seller, "shop-listed-1440");
 
   // ---------- a phone becomes the porch camera (what the QR code on the dashboard opens)
@@ -131,8 +131,8 @@ try {
   await cam.goto(`${BASE}/shop/${shopId}/camera#ck=${reg.camToken}`);
   await shot(cam, "camera-start-390");
   await cam.getByRole("button", { name: "Start Camera" }).click();
-  await cam.getByText("On. Waiting for a pickup").waitFor({ timeout: 15_000 });
-  await seller.locator("#camera .live[data-on='true']").waitFor({ timeout: 10_000 });
+  await cam.getByText("On, waiting for a pickup").waitFor({ timeout: 15_000 });
+  await seller.locator("#camera .badge.sun").waitFor({ timeout: 10_000 });
   await shot(cam, "camera-on-390");
 
   // ---------- buyer on their phone: asks, offers
@@ -145,7 +145,7 @@ try {
   await buyer.getByRole("button", { name: "Continue" }).click();
   await buyer.getByLabel("Message the seller’s assistant").fill("Does it fold flat for a car trunk?");
   await buyer.getByRole("button", { name: "Send" }).click();
-  await until("assistant answers the question", async () => (await buyer.locator(".msg:not(.me)").count()) > 0, 60_000);
+  await until("assistant answers the question", async () => (await buyer.locator(".bubble-row:not(.me)").count()) > 0, 60_000);
   await buyer.getByLabel("Your offer").fill("95");
   await buyer.getByRole("button", { name: "Send Offer" }).click();
   await buyer.getByText(/Waiting for the owner to say yes/).waitFor({ timeout: 30_000 });

@@ -10,6 +10,7 @@
 //   MAX_SANDBOXES        concurrent demo worlds (default 60), SANDBOX_IDLE_MIN (default 30)
 //   MAX_SHOPS            concurrent shops (default 150), SHOP_IDLE_HOURS (default 72)
 //   DEVICE_DEMO=1        link the Alexa+ device tour from the web app (the judges' site)
+//   ALEXA_SKILL_ID       amzn1.ask.skill.… : turns on the Stoop skill's endpoint (POST /alexa)
 //   LLM_MODE=bedrock     live models (Bedrock); LLM_DAILY_CALL_CAP bounds calls per day
 import { serve } from "@hono/node-server";
 import type { Server } from "node:http";
@@ -31,6 +32,7 @@ const server = await createSandboxServer({
   maxShops: Number(process.env.MAX_SHOPS ?? 150),
   shopIdleMs: Number(process.env.SHOP_IDLE_HOURS ?? 72) * 3_600_000,
   deviceDemo: process.env.DEVICE_DEMO === "1",
+  alexaSkillId: process.env.ALEXA_SKILL_ID || undefined,
 });
 
 const http = serve({ fetch: server.app.fetch, port, hostname: "0.0.0.0" }, () => {

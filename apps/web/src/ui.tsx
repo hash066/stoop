@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { renderSVG } from "uqr";
+import { Check as CheckIcon, Copy, Mark, Share } from "./icons.tsx";
 
 // ---------- routing (history API; the server answers every app path with this app)
 
@@ -22,12 +23,13 @@ export const usePath = () =>
     () => location.pathname,
   );
 
-export function Link({ to, className, style, children }: { to: string; className?: string; style?: CSSProperties; children: ReactNode }) {
+export function Link({ to, className, style, children, ...rest }: { to: string; className?: string; style?: CSSProperties; children: ReactNode; "aria-label"?: string }) {
   return (
     <a
       href={to}
       className={className}
       style={style}
+      {...rest}
       onClick={(e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
         e.preventDefault();
@@ -41,15 +43,18 @@ export function Link({ to, className, style, children }: { to: string; className
 
 // ---------- page chrome
 
-export function Bar({ right }: { right?: ReactNode }) {
+export function Nav({ right, dark }: { right?: ReactNode; dark?: boolean }) {
   return (
-    <header className="bar">
-      <Link to="/" className="word">
-        Stoop
-      </Link>
-      <nav className="row" aria-label="Main">
-        {right}
-      </nav>
+    <header className={`nav${dark ? " on-dark" : ""}`}>
+      <div className="nav-in">
+        <Link to="/" className="logo" aria-label="Stoop home">
+          <Mark />
+          Stoop
+        </Link>
+        <nav className="nav-links" aria-label="Main">
+          {right}
+        </nav>
+      </div>
     </header>
   );
 }
@@ -93,17 +98,21 @@ export function usePoll(fn: () => Promise<void> | void, ms: number, deps: unknow
 // ---------- small pieces
 
 export function QR({ text, label }: { text: string; label: string }) {
-  const svg = renderSVG(text, { border: 1, whiteColor: "#ffffff", blackColor: "#131714" });
+  const svg = renderSVG(text, { border: 1, whiteColor: "#ffffff", blackColor: "#0f1813" });
   return <div className="qr" role="img" aria-label={label} dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
 export function Toast({ text, onDone }: { text: string; onDone(): void }) {
+  // the page re-renders every few seconds (polling); only a new message restarts the timer
+  const done = useRef(onDone);
+  done.current = onDone;
   useEffect(() => {
-    const t = window.setTimeout(onDone, 4200);
+    const t = window.setTimeout(() => done.current(), 4500);
     return () => window.clearTimeout(t);
-  }, [text, onDone]);
+  }, [text]);
   return (
     <div className="toast" role="status" aria-live="polite">
+      <CheckIcon />
       {text}
     </div>
   );
@@ -114,7 +123,7 @@ export function useToast() {
   return { toast: setText, node: text ? <Toast text={text} onDone={() => setText("")} /> : null };
 }
 
-export function CopyButton({ text, label = "Copy Link", className = "btn quiet" }: { text: string; label?: string; className?: string }) {
+export function CopyButton({ text, label = "Copy Link", className = "btn ghost" }: { text: string; label?: string; className?: string }) {
   const [done, setDone] = useState(false);
   return (
     <button
@@ -130,63 +139,67 @@ export function CopyButton({ text, label = "Copy Link", className = "btn quiet" 
         window.setTimeout(() => setDone(false), 1800);
       }}
     >
+      {done ? <CheckIcon /> : <Copy />}
       <span aria-live="polite">{done ? "Copied" : label}</span>
     </button>
   );
 }
 
-export function ShareButton({ url, title }: { url: string; title: string }) {
+export function ShareButton({ url, title, className = "btn ghost" }: { url: string; title: string; className?: string }) {
   if (!("share" in navigator)) return null;
   return (
-    <button type="button" className="btn quiet" onClick={() => navigator.share({ title, url }).catch(() => undefined)}>
+    <button type="button" className={className} onClick={() => navigator.share({ title, url }).catch(() => undefined)}>
+      <Share />
       Share…
     </button>
   );
 }
 
-export function Check() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-      <path d="M2.5 7.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-export function Mic() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="9" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" strokeWidth="2" />
-      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-export function Send() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export function Spinner({ label }: { label: string }) {
   return (
-    <p className="meta" role="status" aria-live="polite">
+    <p className="muted small row" role="status" aria-live="polite" style={{ gap: 10 }}>
+      <span className="typing" aria-hidden="true" style={{ padding: "8px 10px", boxShadow: "none", background: "var(--mint-2)" }}>
+        <i />
+        <i />
+        <i />
+      </span>
       {label}
     </p>
   );
 }
 
-export function Closed({ what = "shop" }: { what?: string }) {
+export function Loading({ label = "Loading…" }: { label?: string }) {
   return (
-    <main id="main" className="page section stack">
-      <h1>This {what} has closed.</h1>
-      <p className="lede">Shops on this early test close after three days without a visit, or when we ship an update.</p>
-      <p>
-        <Link to="/sell" className="btn">
-          Open Your Own Shop
-        </Link>
-      </p>
-    </main>
+    <>
+      <Nav />
+      <main id="main" className="page section">
+        <Spinner label={label} />
+      </main>
+    </>
   );
 }
+
+export function Closed({ what = "shop" }: { what?: string }) {
+  return (
+    <>
+      <Nav />
+      <main id="main" className="page section stack" style={{ maxWidth: 720 }}>
+        <h1 style={{ fontSize: "var(--t-xl)" }}>This {what} has closed.</h1>
+        <p className="lede">Shops in this early test close after three days without a visit, or when we ship an update.</p>
+        <p>
+          <Link to="/sell" className="btn lg">
+            Open Your Own Shop
+          </Link>
+        </p>
+      </main>
+    </>
+  );
+}
+
+export const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("") || "S";

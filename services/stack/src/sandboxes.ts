@@ -10,11 +10,16 @@
 //   /s/<id>/*                  that world's API (MCP, UCP, pass, web), proxied to its stack
 //   /app/<name>/*              built app assets (shared by all worlds)
 //   POST /api/feedback         tester feedback -> <dataDir>/feedback.jsonl
+//   POST /alexa                the Stoop Alexa skill's endpoint (Alexa Skills Kit; signed requests only)
+//   POST /api/alexa/pair       a 6-digit code that links a shop to someone's Alexa
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { extname, join, normalize, sep } from "node:path";
 import { Hono, type Context } from "hono";
 import { modelCallsToday } from "@stoop/shared";
+import type { RequestEnvelope } from "ask-sdk-model";
+import { SkillRequestSignatureVerifier, TimestampVerifier } from "ask-sdk-express-adapter";
+import { AlexaLinks, createStoopSkill } from "./alexa.ts";
 import { z } from "zod";
 import { createStack, type Stack, type StackConfig } from "./compose.ts";
 import { landingHtml, tourHtml, expiredHtml } from "./site.ts";
@@ -34,6 +39,12 @@ export interface SandboxServerOptions {
   shopsPerIpPerHour?: number;
   /** Link the Alexa+ device tour from the web app (the judges' site). */
   deviceDemo?: boolean;
+  /** The Stoop Alexa skill's id: enables /alexa and the dashboard's Connect Alexa tile. */
+  alexaSkillId?: string;
+  /** Check Amazon's request signature and timestamp on /alexa (default on; tests turn it off). */
+  alexaVerify?: boolean;
+  /** More origins every world accepts (local recordings that put each device on its own port). */
+  extraOrigins?: string[];
   /** Stack overrides for every world (tests and local end-to-end runs, e.g. a stand-in vision model). */
   stackOverrides?: Partial<StackConfig>;
   /** Where feedback.jsonl is written. */
@@ -69,6 +80,8 @@ const MIME: Record<string, string> = {
   ".woff2": "font/woff2",
   ".json": "application/json",
   ".map": "application/json",
+  ".mp4": "video/mp4",
+  ".vtt": "text/vtt; charset=utf-8",
 };
 
 const Feedback = z.object({
@@ -119,8 +132,9 @@ export async function createSandboxServer(o: SandboxServerOptions) {
     if (!html) return undefined;
     return html.replace("<head>", `<head><script>window.__STOOP__=${JSON.stringify(cfg)}</script>`);
   };
+  const hasVideo = existsSync(join(o.rootDir, "apps", "web", "dist", "demo.mp4"));
   const webApp = (c: Context) => {
-    const html = inject("web", { deviceDemo: !!o.deviceDemo });
+    const html = inject("web", { deviceDemo: !!o.deviceDemo, video: hasVideo, alexaSkill: !!o.alexaSkillId });
     return html ? c.html(html) : c.text("Web app not built. Run pnpm build:web.", 503);
   };
 
@@ -158,7 +172,7 @@ export async function createSandboxServer(o: SandboxServerOptions) {
     const stack = await createStack({
       publicBaseUrl: `${origin}/s/${id}`,
       passBaseUrl: `${origin}/shop/${id}`,
-      allowedOrigins: [origin],
+      allowedOrigins: [origin, ...(o.extraOrigins ?? [])],
       rootDir: o.rootDir,
       seedDemo: false,
       frameSource: "porchcam",
@@ -197,7 +211,7 @@ export async function createSandboxServer(o: SandboxServerOptions) {
     const stack = await createStack({
       publicBaseUrl: base,
       passBaseUrl: `${base}/m`,
-      allowedOrigins: [origin],
+      allowedOrigins: [origin, ...(o.extraOrigins ?? [])],
       rootDir: o.rootDir,
       seedDemo: true,
       autoTick: true,
@@ -209,6 +223,57 @@ export async function createSandboxServer(o: SandboxServerOptions) {
     worlds.set(id, { id, kind: "demo", stack, createdAt: t, lastSeen: t });
     record(key);
     return c.json({ id, tour: `/s/${id}/` });
+  });
+
+  // ---------- the Stoop skill on a real Alexa
+  const links = new AlexaLinks(join(o.dataDir, "alexa-links.json"), now);
+  const skill = createStoopSkill({
+    skillId: o.alexaSkillId,
+    links,
+    shop: (id) => {
+      const w = worlds.get(id);
+      if (!w || w.kind !== "shop") return undefined;
+      w.lastSeen = now();
+      return {
+        fetch: async (r) => w.stack.app.fetch(r),
+        shopName: async (token) => {
+          const s = w.stack.sellers.get(token);
+          return s ? `${(await w.stack.settlement.householdPublic(s.householdId)).displayName}’s shop` : undefined;
+        },
+      };
+    },
+  });
+  const signature = new SkillRequestSignatureVerifier();
+  const timestamp = new TimestampVerifier();
+  app.post("/alexa", async (c) => {
+    if (!o.alexaSkillId) return c.json({ error: "not_found" }, 404);
+    const raw = await c.req.text();
+    if (o.alexaVerify !== false) {
+      const headers: Record<string, string> = {};
+      c.req.raw.headers.forEach((v, k) => (headers[k.toLowerCase()] = v));
+      try {
+        await signature.verify(raw, headers);
+        await timestamp.verify(raw);
+      } catch {
+        return c.json({ error: "bad_request_signature" }, 400);
+      }
+    }
+    try {
+      return c.json(await skill.invoke(JSON.parse(raw) as RequestEnvelope));
+    } catch {
+      return c.json({ error: "skill_error" }, 400);
+    }
+  });
+  app.post("/api/alexa/pair", async (c) => {
+    if (!o.alexaSkillId) return c.json({ error: "not_found" }, 404);
+    const { shop, token } = (await c.req.json().catch(() => ({}))) as { shop?: string; token?: string };
+    const handle = shop ? worlds.get(shop) : undefined;
+    const name = handle && handle.kind === "shop" && token ? await (async () => {
+      const s = handle.stack.sellers.get(token);
+      return s ? `${(await handle.stack.settlement.householdPublic(s.householdId)).displayName}’s shop` : undefined;
+    })() : undefined;
+    if (!name) return c.json({ error: "unauthorized" }, 401);
+    return c.json({ code: links.newCode(shop!, token!, name), invocation: "stoop shop", expiresInMinutes: 10 });
   });
 
   app.post("/api/feedback", async (c) => {
@@ -233,10 +298,22 @@ export async function createSandboxServer(o: SandboxServerOptions) {
     const rel = c.req.path.slice(`/app/${name}/`.length);
     const file = normalize(join(dist, rel));
     if (!file.startsWith(dist + sep) || !existsSync(file)) return c.notFound();
-    return c.body(readFileSync(file), 200, {
+    const body = readFileSync(file);
+    const headers: Record<string, string> = {
       "Content-Type": MIME[extname(file)] ?? "application/octet-stream",
-      "Cache-Control": rel.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache",
-    });
+      "Cache-Control": rel.startsWith("assets/") ? "public, max-age=31536000, immutable" : extname(file) === ".mp4" ? "public, max-age=3600" : "no-cache",
+      "Accept-Ranges": "bytes",
+    };
+    // byte ranges, so video seeks (and plays at all on iOS Safari)
+    const range = /^bytes=(\d*)-(\d*)$/.exec(c.req.header("range") ?? "");
+    if (range && (range[1] || range[2])) {
+      const size = body.length;
+      const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+      const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+      if (start >= size || start > end) return c.body(null, 416, { "Content-Range": `bytes */${size}` });
+      return c.body(body.subarray(start, end + 1), 206, { ...headers, "Content-Range": `bytes ${start}-${end}/${size}` });
+    }
+    return c.body(body, 200, headers);
   });
 
   // Per-world routes

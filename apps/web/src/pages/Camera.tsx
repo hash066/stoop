@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, clock, tokens } from "../api.ts";
-import { Bar, Closed, Link, useTitle } from "../ui.tsx";
+import { Camera as CameraIcon, Check as CheckIcon } from "../icons.tsx";
+import { Closed, Link, Nav, useTitle } from "../ui.tsx";
 
 type Phase = "idle" | "starting" | "on" | "denied" | "replaced" | "noauth" | "closed" | "error";
 
@@ -172,85 +173,113 @@ export function Camera({ shop }: { shop: string }) {
 
   if (phase === "closed") return <Closed />;
 
+  const on = phase === "on";
   return (
-    <>
-      <Bar right={tokens.get("seller", shop) ? <Link to={`/shop/${shop}`}>Your shop</Link> : undefined} />
-      <main id="main" className="page stack" style={{ paddingBottom: 64 }}>
-        <h1 style={{ fontSize: "var(--t-l)" }}>Porch camera</h1>
-        <div className="split">
-        <div className="stack">
-          <div className="cam">
+    <div className="cam-page">
+      <Nav
+        dark
+        right={
+          tokens.get("seller", shop) ? (
+            <Link to={`/shop/${shop}`} className="btn on-dark sm">
+              Your Shop
+            </Link>
+          ) : undefined
+        }
+      />
+      <main id="main" className="page grid-2" style={{ paddingBlock: "clamp(12px, 3vw, 32px) 48px", ["--cols" as string]: "minmax(0, 1.4fr) minmax(0, 1fr)" }}>
+        <div className="stack-s">
+          <div className="cam-video">
             <video ref={video} playsInline muted aria-label="What the porch camera sees" />
-          </div>
-          {phase === "on" ? (
-            <div className="row">
-              <span className="live" data-on={visible}>
-                {visible ? (watching.length ? `Watching the pickup of ${watching.join(", ")}` : "On. Waiting for a pickup") : "Paused. Bring this page back on screen"}
+            <div className="cam-overlay">
+              <span className={`cam-chip${on && visible ? "" : " off"}`}>
+                <span className={`dot${on && visible ? " live" : ""}`} />
+                {on ? (visible ? (watching.length ? "Watching a pickup" : "On, waiting for a pickup") : "Paused") : "Camera off"}
               </span>
-              <button
-                type="button"
-                className="btn quiet"
-                onClick={() => {
-                  const next = facing === "environment" ? "user" : "environment";
-                  setFacing(next);
-                  void start(next);
-                }}
-              >
-                Switch Camera
-              </button>
+              {on ? (
+                <button
+                  type="button"
+                  className="cam-chip"
+                  style={{ border: 0, color: "#fff", cursor: "pointer" }}
+                  onClick={() => {
+                    const next = facing === "environment" ? "user" : "environment";
+                    setFacing(next);
+                    void start(next);
+                  }}
+                >
+                  Switch Camera
+                </button>
+              ) : null}
             </div>
-          ) : null}
+            {!on ? (
+              <div className="video-empty">
+                <CameraIcon style={{ width: 56, height: 56, color: "var(--sun)" }} />
+              </div>
+            ) : null}
+          </div>
           {lastSent ? (
-            <p className="meta num">
+            <p className="tiny num">
               Last photo sent at {clock(lastSent.at)} ({lastSent.kind === "asked" ? "Stoop asked for it" : "movement during a pickup"}).
             </p>
           ) : null}
         </div>
-        <div className="stack">
+        <div className="stack" style={{ ["--gap" as string]: "18px" }}>
+          <h1 style={{ fontSize: "var(--t-xl)", color: "#fff" }}>Porch camera</h1>
           {phase === "idle" || phase === "starting" || phase === "error" ? (
             <>
-              <p className="lede">Point this phone or laptop at the spot where you leave things{placement ? `: ${placement.replace(/\.$/, "")}` : ""}.</p>
-              <ul className="stack-s" style={{ paddingLeft: "1.2em", margin: 0 }}>
-                <li>Stoop asks for a photo when a buyer’s pickup window opens, and again after they’ve been.</li>
-                <li>During a pickup, movement sends a photo so Stoop can count whether someone is at the door. It never identifies anyone.</li>
-                <li>When no pickup is happening, nothing leaves this device.</li>
-              </ul>
+              <p className="lede" style={{ color: "rgb(255 255 255 / 0.8)" }}>
+                Point this phone or laptop at the spot where you leave things{placement ? `: ${placement.replace(/\.$/, "")}` : ""}.
+              </p>
+              <div className="card stack-s">
+                {[
+                  "Stoop asks for a photo when a buyer’s pickup window opens, and again after they’ve been.",
+                  "During a pickup, movement sends a photo so Stoop can count whether someone is at the door. It never identifies anyone.",
+                  "When no pickup is happening, nothing leaves this device.",
+                ].map((s) => (
+                  <p key={s} className="row small" style={{ gap: 10, alignItems: "flex-start", flexWrap: "nowrap" }}>
+                    <CheckIcon style={{ width: 18, height: 18, color: "var(--sun)", flex: "none", marginTop: 3 }} />
+                    <span>{s}</span>
+                  </p>
+                ))}
+              </div>
               {phase === "error" ? (
-                <p className="err" role="alert">
+                <p className="note bad" role="alert">
                   The camera didn’t start{why ? `: ${why}` : ""}. Close other apps using it and try again.
                 </p>
               ) : null}
-              <button className="btn big wide" type="button" disabled={phase === "starting"} onClick={() => void start()}>
+              <button className="btn xl block" type="button" disabled={phase === "starting"} onClick={() => void start()}>
                 {phase === "starting" ? "Starting…" : "Start Camera"}
               </button>
             </>
           ) : null}
-          {phase === "on" ? (
-            <div className="stack-s">
-              <p>Leave this page open, on screen and plugged in. Stoop checks in with it every second.</p>
-              <p className="meta">If the camera is off when a pickup starts, the seller and buyer confirm the pickup themselves instead.</p>
-              <button
-                className="btn quiet"
-                type="button"
-                onClick={() => {
-                  stopAll();
-                  setPhase("idle");
-                }}
-              >
-                Stop Camera
-              </button>
+          {on ? (
+            <div className="stack">
+              {watching.length ? (
+                <div className="card stack-s" style={{ background: "rgb(255 200 61 / 0.14)" }}>
+                  <span className="badge sun">Pickup in progress</span>
+                  <p>Watching for the pickup of {watching.join(", ")}.</p>
+                </div>
+              ) : null}
+              <p className="muted">Leave this page open, on screen and plugged in. Stoop checks in with it every second.</p>
+              <p className="tiny">If the camera is off when a pickup starts, the seller and buyer confirm the pickup themselves instead.</p>
+              <div>
+                <button
+                  className="btn on-dark"
+                  type="button"
+                  onClick={() => {
+                    stopAll();
+                    setPhase("idle");
+                  }}
+                >
+                  Stop Camera
+                </button>
+              </div>
             </div>
           ) : null}
-          {phase === "denied" ? (
-            <p className="note bad">
-              This page isn’t allowed to use the camera. Allow camera access for this site in your browser’s settings, then reload.
-            </p>
-          ) : null}
+          {phase === "denied" ? <p className="note bad">This page isn’t allowed to use the camera. Allow camera access for this site in your browser’s settings, then reload.</p> : null}
           {phase === "replaced" ? <p className="note">Another device is now this shop’s porch camera, so this one stopped.</p> : null}
           {phase === "noauth" ? <p className="note">Open the camera link from your shop page (Porch camera, then Use Your Phone) to use this device.</p> : null}
         </div>
-        </div>
       </main>
-    </>
+    </div>
   );
 }

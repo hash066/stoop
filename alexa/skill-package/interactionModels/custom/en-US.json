@@ -1,0 +1,380 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "stoop shop",
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.YesIntent",
+          "samples": [
+            "accept it",
+            "accept",
+            "approve it",
+            "sounds good",
+            "do it",
+            "go ahead"
+          ]
+        },
+        {
+          "name": "AMAZON.NoIntent",
+          "samples": [
+            "decline it",
+            "decline",
+            "reject it",
+            "no thanks",
+            "don't"
+          ]
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "LinkShopIntent",
+          "slots": [
+            {
+              "name": "code",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "my code is {code}",
+            "the code is {code}",
+            "code {code}",
+            "connect with {code}",
+            "link my shop with {code}",
+            "it's {code}",
+            "{code}"
+          ]
+        },
+        {
+          "name": "OffersIntent",
+          "samples": [
+            "any offers",
+            "do I have any offers",
+            "if I have any offers",
+            "if there are any offers",
+            "what offers do I have",
+            "check my offers",
+            "are there any offers",
+            "did anyone make an offer",
+            "for my offers",
+            "about offers"
+          ]
+        },
+        {
+          "name": "StatusIntent",
+          "samples": [
+            "how is my sale going",
+            "how my sale is going",
+            "how's my sale",
+            "sale status",
+            "what's happening with my sale",
+            "has it been picked up",
+            "did the buyer pick it up",
+            "if the buyer picked it up",
+            "about my sale",
+            "where is my sale"
+          ]
+        },
+        {
+          "name": "ItemsIntent",
+          "samples": [
+            "what am I selling",
+            "what I'm selling",
+            "what's for sale",
+            "what do I have listed",
+            "what have I listed",
+            "about my items",
+            "what's in my shop"
+          ]
+        },
+        {
+          "name": "MandateIntent",
+          "slots": [
+            {
+              "name": "price",
+              "type": "AMAZON.NUMBER"
+            },
+            {
+              "name": "item",
+              "type": "ITEM_NAME"
+            }
+          ],
+          "samples": [
+            "don't go below {price} on the {item}",
+            "don't go below {price} dollars on the {item}",
+            "not to go below {price} dollars on the {item}",
+            "don't take less than {price} for the {item}",
+            "don't take less than {price} dollars for the {item}",
+            "the lowest price for the {item} is {price}",
+            "set the lowest price for the {item} to {price}",
+            "set the lowest price for the {item} to {price} dollars"
+          ]
+        },
+        {
+          "name": "ListIntent",
+          "slots": [
+            {
+              "name": "item",
+              "type": "ITEM_NAME"
+            },
+            {
+              "name": "price",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "list the {item}",
+            "list the {item} for {price}",
+            "list the {item} for {price} dollars",
+            "sell the {item}",
+            "sell the {item} for {price}",
+            "sell the {item} for {price} dollars",
+            "to sell the {item}",
+            "to list the {item} for {price} dollars",
+            "put the {item} up for sale"
+          ]
+        },
+        {
+          "name": "CommandIntent",
+          "slots": [
+            {
+              "name": "query",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "to {query}",
+            "please {query}",
+            "I want to {query}",
+            "tell my shop to {query}",
+            "can you {query}"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "ITEM_NAME",
+          "values": [
+            {
+              "name": {
+                "value": "stroller"
+              }
+            },
+            {
+              "name": {
+                "value": "jogging stroller"
+              }
+            },
+            {
+              "name": {
+                "value": "bike"
+              }
+            },
+            {
+              "name": {
+                "value": "bicycle"
+              }
+            },
+            {
+              "name": {
+                "value": "crib"
+              }
+            },
+            {
+              "name": {
+                "value": "stand mixer"
+              }
+            },
+            {
+              "name": {
+                "value": "mixer"
+              }
+            },
+            {
+              "name": {
+                "value": "standing desk"
+              }
+            },
+            {
+              "name": {
+                "value": "desk"
+              }
+            },
+            {
+              "name": {
+                "value": "chair"
+              }
+            },
+            {
+              "name": {
+                "value": "table"
+              }
+            },
+            {
+              "name": {
+                "value": "lamp"
+              }
+            },
+            {
+              "name": {
+                "value": "couch"
+              }
+            },
+            {
+              "name": {
+                "value": "sofa"
+              }
+            },
+            {
+              "name": {
+                "value": "dresser"
+              }
+            },
+            {
+              "name": {
+                "value": "bookshelf"
+              }
+            },
+            {
+              "name": {
+                "value": "car seat"
+              }
+            },
+            {
+              "name": {
+                "value": "high chair"
+              }
+            },
+            {
+              "name": {
+                "value": "scooter"
+              }
+            },
+            {
+              "name": {
+                "value": "skateboard"
+              }
+            },
+            {
+              "name": {
+                "value": "guitar"
+              }
+            },
+            {
+              "name": {
+                "value": "keyboard"
+              }
+            },
+            {
+              "name": {
+                "value": "monitor"
+              }
+            },
+            {
+              "name": {
+                "value": "tv"
+              }
+            },
+            {
+              "name": {
+                "value": "camera"
+              }
+            },
+            {
+              "name": {
+                "value": "rug"
+              }
+            },
+            {
+              "name": {
+                "value": "mirror"
+              }
+            },
+            {
+              "name": {
+                "value": "microwave"
+              }
+            },
+            {
+              "name": {
+                "value": "toaster"
+              }
+            },
+            {
+              "name": {
+                "value": "coffee maker"
+              }
+            },
+            {
+              "name": {
+                "value": "vacuum"
+              }
+            },
+            {
+              "name": {
+                "value": "grill"
+              }
+            },
+            {
+              "name": {
+                "value": "lawn mower"
+              }
+            },
+            {
+              "name": {
+                "value": "drill"
+              }
+            },
+            {
+              "name": {
+                "value": "tent"
+              }
+            },
+            {
+              "name": {
+                "value": "kayak"
+              }
+            },
+            {
+              "name": {
+                "value": "treadmill"
+              }
+            },
+            {
+              "name": {
+                "value": "rowing machine"
+              }
+            },
+            {
+              "name": {
+                "value": "dumbbells"
+              }
+            },
+            {
+              "name": {
+                "value": "speaker"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
