@@ -9,6 +9,7 @@ import {
   Negotiator,
   parseMoneyMinor,
   planOffline,
+  withStatedConstraints,
   rulesOnlyChecker,
   SCAMS,
   type McpToolInfo,
@@ -204,6 +205,21 @@ describe("offline planner", () => {
       { name: "list_items", args: { items: ["stroller", "bike"] } },
       { name: "set_mandate", args: { item: "stroller", floorDollars: 90 } },
     ]);
+  });
+
+  it("never drops a stated minimum price from a model's plan (found live: Nova listed but skipped the floor)", () => {
+    const u = "Sell the stroller and the bike. Don't go below $90 on the stroller.";
+    const offline = planOffline(u, { role: "seller" }, sellerTools);
+    const model = { calls: [{ name: "list_items", args: { items: ["stroller", "bike"] } }], planner: "bedrock:nova" };
+    const merged = withStatedConstraints(model, offline);
+    expect(merged.calls).toEqual([
+      { name: "list_items", args: { items: ["stroller", "bike"] } },
+      { name: "set_mandate", args: { item: "stroller", floorDollars: 90 } },
+    ]);
+    expect(merged.planner).toBe("bedrock:nova+stated-constraints");
+    // nothing added when the model already recorded the floor, or when no constraint was stated
+    expect(withStatedConstraints({ ...model, calls: offline.calls }, offline).calls).toHaveLength(2);
+    expect(withStatedConstraints(model, planOffline("Sell the bike", { role: "seller" }, sellerTools)).calls).toHaveLength(1);
   });
 
   it("buyer search, offer, checkout with voice code", () => {

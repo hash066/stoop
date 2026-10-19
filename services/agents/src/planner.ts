@@ -136,7 +136,7 @@ export async function planBedrock(utterance: string, state: PlannerState, tools:
   const out = await client.send(
     new ConverseCommand({
       modelId: modelIdFor("PLANNER"),
-      system: [{ text: `${skill}\n\nCurrent state (JSON): ${JSON.stringify(state)}\nCall the tools needed for the user's request. Do not invent ids.` }],
+      system: [{ text: `${skill}\n\nCurrent state (JSON): ${JSON.stringify(state)}\nCall every tool the user's request needs, in order. A request can need several (for example list_items and then set_mandate when the user also states a minimum price). Do not invent ids.` }],
       messages: [{ role: "user", content: [{ text: utterance }] }],
       toolConfig: { tools: toolSpecs },
       inferenceConfig: { maxTokens: 400, temperature: 0 },
@@ -151,10 +151,22 @@ export async function planBedrock(utterance: string, state: PlannerState, tools:
   return { calls, say: calls.length ? undefined : say, planner: `bedrock:${modelIdFor("PLANNER")}` };
 }
 
+/** Tools that record a constraint the user stated out loud (a private minimum, pickup times). */
+const CONSTRAINT_TOOLS = new Set(["set_mandate", "set_pickup_preferences"]);
+
+/**
+ * A constraint the user said is never dropped: if the model's plan misses one that the deterministic
+ * parser found ("don't go below $90"), it is appended after the model's calls.
+ */
+export function withStatedConstraints(plan: Plan, offline: Plan): Plan {
+  const missing = offline.calls.filter((c) => CONSTRAINT_TOOLS.has(c.name) && !plan.calls.some((p) => p.name === c.name));
+  return missing.length ? { ...plan, calls: [...plan.calls, ...missing], say: undefined, planner: `${plan.planner}+stated-constraints` } : plan;
+}
+
 export async function planTurn(utterance: string, state: PlannerState, tools: McpToolInfo[], skill: string): Promise<Plan> {
   if (llmMode() === "bedrock" && takeModelCalls(1)) {
     try {
-      return await planBedrock(utterance, state, tools, skill);
+      return withStatedConstraints(await planBedrock(utterance, state, tools, skill), planOffline(utterance, state, tools));
     } catch {
       return { ...planOffline(utterance, state, tools), planner: "offline-fallback" };
     }
