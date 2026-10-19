@@ -1,0 +1,21 @@
+{
+  "name": "@stoop/negotiator-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Stoop negotiating agent (Strands on Bedrock) packaged for Amazon Bedrock AgentCore Runtime as Node 22 code. It reaches the shop only through a one-time negotiation port.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@stoop/agents": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  }
+}

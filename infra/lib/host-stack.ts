@@ -27,6 +27,8 @@ export interface HostStackProps extends StackProps {
   publicDailyModelCalls?: number;
   /** The Stoop Alexa skill (amzn1.ask.skill.…) whose endpoint is the tester site's /alexa. */
   alexaSkillId?: string;
+  /** StoopAgentStack's runtime: both sites run the negotiating agent there. */
+  negotiatorRuntimeArn?: string;
 }
 
 export class HostStack extends Stack {
@@ -58,9 +60,10 @@ export class HostStack extends Stack {
     );
 
     const branch = props.branch ?? "main";
+    const agent = props.negotiatorRuntimeArn ? ` -e NEGOTIATOR_RUNTIME_ARN=${props.negotiatorRuntimeArn}` : "";
     const run = (name: string, port: number, extra: string) =>
       // host networking: the judge container reaches the instance role via IMDS (hop limit 1)
-      `docker run -d --name ${name} --restart always --network host -e PORT=${port} -e PUBLIC_PROTO=https -e ADMIN_KEY="$ADMIN_KEY" ${extra} -v /opt/stoop-data-${name}:/data stoop`;
+      `docker run -d --name ${name} --restart always --network host -e PORT=${port} -e PUBLIC_PROTO=https -e ADMIN_KEY="$ADMIN_KEY"${agent} ${extra} -v /opt/stoop-data-${name}:/data stoop`;
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       "set -euxo pipefail",

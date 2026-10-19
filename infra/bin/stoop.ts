@@ -1,5 +1,6 @@
 // CDK app: `pnpm --filter @stoop/infra deploy` (us-east-1, profile `stoop`).
 import { App, Tags } from "aws-cdk-lib";
+import { AgentStack } from "../lib/agent-stack.ts";
 import { HostStack } from "../lib/host-stack.ts";
 import { StoopStack } from "../lib/stoop-stack.ts";
 
@@ -21,5 +22,14 @@ const host = new HostStack(app, "StoopHostStack", {
   judgeDailyModelCalls: 1000,
   publicDailyModelCalls: 1500,
   alexaSkillId: process.env.STOOP_ALEXA_SKILL_ID,
+  negotiatorRuntimeArn: process.env.STOOP_NEGOTIATOR_RUNTIME_ARN,
 });
 Tags.of(host).add("project", "stoop");
+
+// The negotiating agent on Bedrock AgentCore Runtime (build first: pnpm --filter @stoop/negotiator-runtime build)
+const agent = new AgentStack(app, "StoopAgentStack", {
+  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION ?? "us-east-1" },
+  description: "Stoop: the negotiating agent on Amazon Bedrock AgentCore Runtime",
+  hostRoleName: process.env.STOOP_HOST_ROLE_NAME,
+});
+Tags.of(agent).add("project", "stoop");

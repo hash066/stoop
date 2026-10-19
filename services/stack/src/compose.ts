@@ -30,6 +30,8 @@ import { awsSettlementDeps, type AwsWiring } from "@stoop/settlement/aws";
 import { BedrockVision, LabelVision, Verifier, type VisionAdapter } from "@stoop/verifier";
 import { LocalPhotoStore, LocalPreferenceMemory } from "./memory.ts";
 import { PorchCamSource } from "./porchcam.ts";
+import { AgentCoreNegotiator, agentPortRouter, PortGrants } from "./agentcore.ts";
+import { takeModelCalls } from "@stoop/shared";
 import { webRouter } from "./web.ts";
 import { NotificationHub } from "./notifications.ts";
 import { verifyPageHtml, refundPolicyHtml } from "./pages.ts";
@@ -61,6 +63,8 @@ export interface StackConfig {
   vision?: VisionAdapter;
   /** StoopStack outputs: run Settlement on DynamoDB, KMS, the Vault Lambda and Step Functions. */
   aws?: AwsWiring;
+  /** Run the negotiating agent on this Bedrock AgentCore Runtime (default: env NEGOTIATOR_RUNTIME_ARN). */
+  negotiatorRuntimeArn?: string;
   /** This world's own keys (address vault, approval tokens). Given back when it is restored. */
   secrets?: WorldSecrets;
   /** Receipt signing key (PEM), shared by every world on a server so old receipts stay verifiable. */
@@ -176,7 +180,25 @@ export async function createStack(cfg: StackConfig) {
 
   // ---------- agents, memory, photos, cards
   const appraiser = Appraiser.forMode(cfg.recallChecker ?? cpscChecker());
-  const negotiator = new Negotiator(settlement);
+  // The negotiating agent runs on Bedrock AgentCore Runtime when NEGOTIATOR_RUNTIME_ARN is set (the
+  // hosted sites), reaching this shop only through a one-time negotiation port; otherwise in-process.
+  const localNegotiator = new Negotiator(settlement);
+  const portGrants = new PortGrants(() => clock.now());
+  const runtimeArn = cfg.negotiatorRuntimeArn ?? process.env.NEGOTIATOR_RUNTIME_ARN;
+  const negotiator =
+    runtimeArn && llmMode() === "bedrock"
+      ? new AgentCoreNegotiator({
+          runtimeArn,
+          region: process.env.AWS_REGION ?? "us-east-1",
+          portUrl: `${cfg.publicBaseUrl}/agent-port`,
+          settlement,
+          grants: portGrants,
+          local: localNegotiator,
+          bus,
+          now: () => clock.now(),
+          budget: () => takeModelCalls(3),
+        })
+      : localNegotiator;
   const photos = new LocalPhotoStore(cfg.publicBaseUrl);
   const prefs = new LocalPreferenceMemory(() => [DEMO.household.address]);
   const cards = loadCards(join(cfg.rootDir, "packages", "ui-cards", "dist"));
@@ -312,6 +334,9 @@ export async function createStack(cfg: StackConfig) {
     const stored = photos.add(actor.householdId, loadDemoPhotos(cfg.rootDir));
     return c.json({ photos: stored.map((p) => ({ id: p.id, name: p.name, url: p.url })) });
   });
+
+  // The negotiation port for the agent on AgentCore Runtime (one-time grants, this shop only)
+  app.route("/agent-port", agentPortRouter(settlement, portGrants));
 
   // Planner (the Alexa sim's "brain"; Bedrock in AWS)
   app.post("/planner/turn", async (c) => {
@@ -679,6 +704,8 @@ export async function createStack(cfg: StackConfig) {
     snapshot,
     resume,
     addBuyer,
+    portGrants,
+    localNegotiator,
     tick: () => runDue(clock.now()),
     stop: () => {
       if (timer) clearInterval(timer);

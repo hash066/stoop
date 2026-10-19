@@ -65,7 +65,7 @@ Docker image: `Dockerfile`. AWS deployment (CloudFront + one instance, a public 
 | **MCP** (`@modelcontextprotocol/sdk` 1.32.1, spec 2025-11-25): Streamable HTTP, sessions, structured output, form + URL **elicitation**, experimental **Tasks** | Server: `services/mcp-server`. Clients: the web app (`apps/web/src/api.ts`, approvals arrive as elicitation mid-call), the Alexa+ device simulator (`apps/alexa-sim`) | Live on both sites |
 | **MCP Apps** (`@modelcontextprotocol/ext-apps`) | Cards in `packages/ui-cards`, hosted by the device simulator | Live (judges' `/demo`) |
 | **Alexa+ add-on checkout contract (UCP 2026-04-08)** | `services/settlement/src/ucp.ts`; R13 purchase rules (breakdown, explicit yes, 4-digit code over $100) | Live |
-| **Alexa Skills Kit SDK** (`ask-sdk-core`, `ask-sdk-express-adapter` request-signature and timestamp verification) | `services/stack/src/alexa.ts`, endpoint `POST /alexa`; skill package in `alexa/` (invocation "stoop shop") | Built and tested; goes live when the skill is deployed to an Amazon developer account (`alexa/README.md`) |
+| **Alexa Skills Kit SDK** (`ask-sdk-core`, `ask-sdk-express-adapter` request-signature and timestamp verification) | `services/stack/src/alexa.ts`, endpoint `POST /alexa`; skill package in `alexa/` (invocation "stoop shop"): sellers hear and accept offers, buyers find, offer and pay with their purchase code | Deployed (development stage) and checked through Amazon's Alexa simulator against the live site |
 | **Agent Skills** | `skills/stoop/SKILL.md` (the planner's instructions) | Live |
 | **Strands Agents SDK** (`@strands-agents/sdk`) | The negotiating agent, `services/agents/src/negotiator.ts` | Live on Bedrock |
 | **Amazon Bedrock** (Nova 2 Lite via `@aws-sdk/client-bedrock-runtime`) | Planner, negotiator, photo identification and pricing, porch-camera vision | Live, under daily call caps |
@@ -73,7 +73,7 @@ Docker image: `Dockerfile`. AWS deployment (CloudFront + one instance, a public 
 | **AWS CDK** | `infra/` (StoopStack, StoopHostStack, $30 budget with stop actions) | Deployed |
 | **Ring Partner API** | `services/ring-bridge` (snapshots, clips, WHEP, signed webhooks) | Checked with a Playground token; no Ring hardware here, so shops use a phone or laptop as the porch camera |
 | **Kiro** | `.kiro/specs/` (Policy Kernel spec-first) | Done |
-| **Bedrock AgentCore** (Runtime, Memory, Observability) | – | Not done yet |
+| **Bedrock AgentCore Runtime** (`@aws-sdk/client-bedrock-agentcore`, CDK `CfnRuntime`, Node 22 code deployment) | The negotiating agent runs on AgentCore (`services/negotiator-runtime`, `infra/lib/agent-stack.ts`); shops call it per turn and it reaches them only through a one-time negotiation port (`services/stack/src/agentcore.ts`); CloudWatch logs per turn | Live on both sites |
 
 ## What's real and what's simulated
 

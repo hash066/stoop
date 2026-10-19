@@ -15,6 +15,7 @@
     "e2e": "tsx e2e/real-flow.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-agentcore": "^3.1152.0",
     "@hono/node-server": "^2.1.5",
     "@stoop/agents": "workspace:*",
     "@stoop/mcp-server": "workspace:*",
