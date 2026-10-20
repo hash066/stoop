@@ -232,40 +232,40 @@
           "name": "WorthIntent",
           "slots": [
             {
-              "name": "item",
+              "name": "thing",
               "type": "AMAZON.SearchQuery"
             }
           ],
           "samples": [
-            "what is my {item} worth",
-            "what's my {item} worth",
-            "how much is my {item} worth",
-            "how much could I get for my {item}",
-            "how much can I get for my {item}",
-            "what would my {item} sell for",
-            "what could I sell my {item} for",
-            "value my {item}",
-            "price my {item}",
-            "what my {item} is worth"
+            "what is my {thing} worth",
+            "what's my {thing} worth",
+            "how much is my {thing} worth",
+            "how much could I get for my {thing}",
+            "how much can I get for my {thing}",
+            "what would my {thing} sell for",
+            "what could I sell my {thing} for",
+            "value my {thing}",
+            "price my {thing}",
+            "what my {thing} is worth"
           ]
         },
         {
           "name": "SellIntent",
           "slots": [
             {
-              "name": "item",
+              "name": "thing",
               "type": "AMAZON.SearchQuery"
             }
           ],
           "samples": [
-            "sell my {item}",
-            "I want to sell my {item}",
-            "help me sell my {item}",
-            "list my {item}",
-            "get rid of my {item}",
-            "to sell my {item}",
-            "put my {item} up for sale",
-            "I'd like to sell my {item}"
+            "sell my {thing}",
+            "I want to sell my {thing}",
+            "help me sell my {thing}",
+            "list my {thing}",
+            "get rid of my {thing}",
+            "to sell my {thing}",
+            "put my {thing} up for sale",
+            "I'd like to sell my {thing}"
           ]
         },
         {

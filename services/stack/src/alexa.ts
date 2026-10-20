@@ -482,8 +482,8 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
   };
 
   const sellHandlers: Alexa.RequestHandler[] = [
-    { canHandle: (h) => intent(h, "WorthIntent"), handle: (h) => voiceSell(h, slot(h, "item"), "worth") },
-    { canHandle: (h) => intent(h, "SellIntent"), handle: (h) => voiceSell(h, slot(h, "item"), "sell") },
+    { canHandle: (h) => intent(h, "WorthIntent"), handle: (h) => voiceSell(h, slot(h, "thing"), "worth") },
+    { canHandle: (h) => intent(h, "SellIntent"), handle: (h) => voiceSell(h, slot(h, "thing"), "sell") },
     // "Do you still need it?"  "No, I don't need it."  -> sell it.  "Yes" / "keep it" -> keep it.
     { canHandle: (h) => intent(h, "AMAZON.NoIntent", "SellItIntent") && !!sellAt(h, "offer"), handle: (h) => askPrice(h, attrs(h).sell!) },
     {

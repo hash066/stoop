@@ -45,7 +45,7 @@
     },
     "permissions": [
       {
-        "name": "read::alexa:device:all:address"
+        "name": "alexa::devices:all:address:full:read"
       }
     ]
   }

@@ -73,12 +73,12 @@ describe("the Stoop skill on Alexa", () => {
     };
 
     // "What's my jogging stroller worth?" ... "Do you still need it?" "Yes" keeps it
-    let r = await ask(intent("WorthIntent", { item: "my old jogging stroller, barely used" }));
+    let r = await ask(intent("WorthIntent", { thing: "my old jogging stroller, barely used" }));
     expect(r.speech).toMatch(/goes for about \$\d+ secondhand\. Do you still need it\?/);
     expect((await ask(intent("AMAZON.YesIntent"), r.attrs)).speech).toMatch(/keep it/);
 
     // ... "No, I don't need it" sells it
-    r = await ask(intent("WorthIntent", { item: "my old jogging stroller, barely used" }));
+    r = await ask(intent("WorthIntent", { thing: "my old jogging stroller, barely used" }));
     r = await ask(intent("SellItIntent"), r.attrs);
     expect(r.speech).toMatch(/Should I list it at \$\d+, or another price\?/);
     r = await ask(intent("PriceIntent", { price: "120" }), r.attrs);
@@ -133,7 +133,7 @@ describe("the Stoop skill on Alexa", () => {
 
   it("prices things it has no comparables for by asking the owner, and takes a spoken address", async () => {
     const { post } = await server({ alexaFetch: (async () => new Response("{}", { status: 403 })) as unknown as typeof fetch });
-    let r = await say(post, intent("SellIntent", { item: "the wooden bench on my porch" }));
+    let r = await say(post, intent("SellIntent", { thing: "the wooden bench on my porch" }));
     expect(r.speech).toMatch(/I don’t have prices for a wooden bench yet\. What would you like to ask for it\?/);
     r = await say(post, intent("PriceIntent", { price: "40" }), r.attrs);
     r = await say(post, intent("AMAZON.NoIntent"), r.attrs); // no lowest price: every offer comes to the owner
