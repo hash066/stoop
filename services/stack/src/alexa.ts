@@ -1,5 +1,8 @@
 // Stoop on a real Alexa: a custom skill built with the Alexa Skills Kit SDK, hosted by this server.
-// A seller links their shop by saying a 6-digit code from their shop page, then talks to it:
+// Selling works by voice from the start: "what's my porch bench worth?", "do you still need it?",
+// "no", a price, a lowest price, and Alexa opens the shop (address from the Alexa account, with the
+// person's permission) and lists it; the porch camera takes the photo when they say "it's out".
+// A shop opened on the website links by saying the 6-digit code from its page. Then:
 //   "Alexa, ask stoop shop if I have any offers."  "Yes."  "Alexa, ask stoop shop how my sale is going."
 // Every answer comes from the shop's own MCP tools, called the way an Alexa-style client calls them:
 // no MCP session and no elicitation, so an action that needs the owner's yes comes back as
@@ -63,6 +66,11 @@ export class AlexaLinks {
   get(userId: string) {
     return this.users.get(userId);
   }
+  /** Links an Alexa account to the shop it just opened by voice. */
+  linkSeller(userId: string, link: { shop: string; token: string; name: string }) {
+    this.users.set(userId, { kind: "seller", ...link });
+    this.save();
+  }
   unlink(userId: string) {
     this.users.delete(userId);
     this.save();
@@ -70,6 +78,25 @@ export class AlexaLinks {
   private save() {
     if (this.file) writeFileSync(this.file, JSON.stringify(Object.fromEntries(this.users)), { mode: 0o600 });
   }
+}
+
+/** A price for something described out loud (before or after there's a shop to keep it in). */
+export interface Quote {
+  title: string;
+  listMinor: number;
+  floorSuggestionMinor: number;
+  priceSource: "comps" | "ai-estimate" | "none";
+  blocked: boolean;
+  blockedReason?: string;
+}
+
+/** What selling by voice needs from the server when the person has no shop yet. */
+export interface ShopMaker {
+  quote(description: string): Promise<Quote | undefined>;
+  /** Opens a shop; the address is encrypted on arrival and a buyer sees it only on their pickup pass. */
+  open(input: { displayName: string; address: string; zip: string; porchInstructions: string }, who: string): Promise<{ shop: string; token: string; name: string } | { error: string }>;
+  /** A one-time code (10 minutes) that turns an old phone into this shop's porch camera. */
+  cameraCode(shop: string, token: string): Promise<{ code: string; url: string } | undefined>;
 }
 
 /** One stateless MCP call into the shop as its seller, like an Alexa+ client without a session. */
@@ -112,8 +139,10 @@ export function parseWant(q: string): { what: string; maxMinor?: number } {
   return { what: (m ? q.slice(0, m.index) : q).replace(/\b(for|me|a|an|some)\s*$/i, "").trim() || q, maxMinor: max ? Math.round(max * 100) : undefined };
 }
 
-const SELLER_TOOLS = new Set(["my_items", "list_items", "set_mandate", "review_offers", "respond_to_offer", "set_pickup_preferences", "handoff_status", "get_receipt", "confirm_pickup", "cancel_sale", "confirm_action"]);
-const LINK_FIRST = "To connect, open your shop on the Stoop website, tap Get a Code under Talk to your shop on Alexa, and tell me the six digits.";
+const SELLER_TOOLS = new Set(["my_items", "describe_item", "photograph_item", "list_items", "set_mandate", "review_offers", "respond_to_offer", "set_pickup_preferences", "handoff_status", "get_receipt", "confirm_pickup", "cancel_sale", "confirm_action"]);
+const LINK_FIRST = "You don’t have a Stoop shop on this Alexa yet. Tell me something to sell, like: sell my porch bench, and I’ll set one up. Or, for a shop you opened on the Stoop website, tap Get a Code there and tell me the six digits.";
+const ADDRESS_PERMISSION = "read::alexa:device:all:address";
+const OUT_HINT = "When it’s on your porch, say: it’s out, and your porch camera will take its photo. No camera yet? Say: set up my camera.";
 const ASK_YES = "Say yes to approve, or no to cancel.";
 
 type Found = { shop: string; shopName: string; listingId: string; title: string; askMinor: number; zip: string; rating: { avg: number | null; verified: number } };
@@ -125,9 +154,24 @@ type Attrs = {
   idx?: number;
   needsCode?: boolean;
   awaitingCode?: boolean;
+  // selling by voice, one step at a time
+  sell?: {
+    step: "offer" | "price" | "floor" | "name" | "address" | "zip" | "confirm_address" | "approve_list" | "approve_floor" | "out";
+    description: string;
+    title: string;
+    listMinor: number;
+    floorSuggestionMinor: number;
+    priceSource: Quote["priceSource"];
+    askMinor?: number;
+    floorMinor?: number;
+    itemId?: string;
+    name?: string;
+    address?: string;
+    zip?: string;
+  };
 };
 
-export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(id: string): ShopHandle | undefined; street?: StreetAccess }) {
+export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(id: string): ShopHandle | undefined; street?: StreetAccess; maker?: ShopMaker; fetch?: typeof fetch }) {
   type Input = Alexa.HandlerInput;
   const attrs = (h: Input) => h.attributesManager.getSessionAttributes() as Attrs;
   const userId = (h: Input) => Alexa.getUserId(h.requestEnvelope);
@@ -302,13 +346,304 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
     },
   ];
 
+
+  // ---------------------------------------------------------------- selling by voice, start to finish
+  type Sell = NonNullable<Attrs["sell"]>;
+  type Linked = { link: Extract<Link, { shop: string }>; handle: ShopHandle };
+  const sellAt = (h: Input, ...steps: Sell["step"][]) => {
+    const s = attrs(h).sell;
+    return s && steps.includes(s.step) ? s : undefined;
+  };
+  const art = (name: string) => (/^[aeiou]/i.test(name) ? "an" : "a");
+  const estimate = (q: Quote) => {
+    const name = inSentence(q.title);
+    if (q.priceSource === "none") return `I don’t have prices for ${art(name)} ${name} yet.`;
+    if (q.priceSource === "ai-estimate") return `I’d estimate ${art(name)} ${name} like yours sells for about ${$(q.listMinor)} secondhand. That’s an AI estimate.`;
+    const lead = art(name);
+    return `${lead.charAt(0).toUpperCase()}${lead.slice(1)} ${name} like yours goes for about ${$(q.listMinor)} secondhand.`;
+  };
+  /** The seller's shop when this Alexa has one (a closed shop is unlinked on the way). */
+  const ownShop = (h: Input): Linked | undefined => {
+    if (!o.links.get(userId(h))) return undefined;
+    const l = linked(h);
+    return "say" in l ? undefined : l;
+  };
+  const NEXT: Record<Sell["step"], string> = {
+    offer: "Do you still need it?",
+    price: "What price should I list it at?",
+    floor: "What’s the lowest price you’d take?",
+    name: "What’s your first name?",
+    address: "Tell me your street address and ZIP code, or allow your address in the Alexa app and say continue.",
+    zip: "What’s your ZIP code?",
+    confirm_address: "Is that address right?",
+    approve_list: ASK_YES,
+    approve_floor: ASK_YES,
+    out: OUT_HINT,
+  };
+
+  const voiceSell = async (h: Input, description: string | undefined, mode: "worth" | "sell") => {
+    const a = attrs(h);
+    if (buyer(h)) return speak(h, "This Alexa is set up for shopping, so I can’t sell from it yet.", true);
+    if (!description) return speak(h, "What would you like to sell? Tell me what it is and what shape it’s in.", true, "What would you like to sell?");
+    const shop = ownShop(h);
+    let q: Quote | undefined;
+    let itemId: string | undefined;
+    if (shop) {
+      const out = await callTool(shop.handle, shop.link.token, "describe_item", { description });
+      if (out.isError) return speak(h, out.text, true);
+      q = { title: out.data.title, listMinor: out.data.listMinor, floorSuggestionMinor: out.data.floorSuggestionMinor, priceSource: out.data.priceSource, blocked: out.data.blocked, blockedReason: out.data.blockedReason };
+      itemId = out.data.itemId;
+    } else if (o.maker) q = await o.maker.quote(description);
+    else return speak(h, LINK_FIRST, true);
+    if (!q) return speak(h, "Tell me what it is and what shape it’s in, like: my wooden porch bench, a few scratches.", true);
+    if (q.blocked) {
+      a.sell = undefined;
+      return speak(h, q.blockedReason ?? `The ${inSentence(q.title)} can’t be resold.`, true);
+    }
+    const s: Sell = { step: "offer", description, title: q.title, listMinor: q.listMinor, floorSuggestionMinor: q.floorSuggestionMinor, priceSource: q.priceSource, itemId };
+    a.sell = s;
+    if (!q.listMinor) {
+      s.step = "price";
+      return speak(h, `${estimate(q)} What would you like to ask for it?`, true, NEXT.price);
+    }
+    if (mode === "worth") return speak(h, `${estimate(q)} Do you still need it?`, true, "Do you still need it, or should I sell it for you?");
+    s.step = "price";
+    return speak(h, `${estimate(q)} Should I list it at ${$(q.listMinor)}, or another price?`, true, `Should I list it at ${$(q.listMinor)}?`);
+  };
+
+  const askPrice = (h: Input, s: Sell) => {
+    s.step = "price";
+    return speak(h, `Okay, I can sell it for you. Should I list it at ${$(s.listMinor)}, or another price?`, true, `Should I list it at ${$(s.listMinor)}?`);
+  };
+  const setAsk = (h: Input, s: Sell, minor: number) => {
+    s.askMinor = minor;
+    s.step = "floor";
+    const tip = s.floorSuggestionMinor > 0 && s.floorSuggestionMinor < minor ? s.floorSuggestionMinor : Math.max(100, Math.round((minor * 0.75) / 500) * 500);
+    return speak(h, `${$(minor)} it is. What’s the lowest you’d take? I’ll never go below it without asking you. Many sellers pick about ${$(tip)}.`, true, NEXT.floor);
+  };
+  const listNow = async (h: Input, l: Linked, s: Sell, lead: string) => {
+    const a = attrs(h);
+    if (!s.itemId) {
+      const d = await callTool(l.handle, l.link.token, "describe_item", { description: s.description });
+      if (d.isError) return speak(h, d.text, true);
+      s.itemId = d.data.itemId;
+      s.title = d.data.title;
+    }
+    const out = await callTool(l.handle, l.link.token, "list_items", { items: [s.itemId], askDollars: (s.askMinor ?? s.listMinor) / 100 });
+    if (out.data.kind === "approval_required" && out.data.pendingActionId) {
+      a.pendingApprovalId = out.data.pendingActionId;
+      s.step = "approve_list";
+      return speak(h, `${lead}${out.text}`, true, ASK_YES);
+    }
+    return speak(h, `${lead}${out.text}`, true);
+  };
+  const setFloor = async (h: Input, s: Sell, minor: number | undefined) => {
+    if (minor !== undefined && minor > (s.askMinor ?? s.listMinor)) return speak(h, `That’s more than your asking price of ${$(s.askMinor ?? s.listMinor)}. What’s the lowest you’d take?`, true, NEXT.floor);
+    s.floorMinor = minor;
+    const lead = minor === undefined ? "Okay, I’ll check every offer with you. " : "";
+    const l = ownShop(h);
+    if (l) return listNow(h, l, s, lead);
+    if (!o.maker) return speak(h, LINK_FIRST, true);
+    s.step = "name";
+    return speak(h, `${lead}Last thing: let’s set up your Stoop shop. What’s your first name?`, true, NEXT.name);
+  };
+
+  /** The address on this Alexa device, if the person allowed Stoop to read it. */
+  const deviceAddress = async (h: Input) => {
+    const sys = h.requestEnvelope.context?.System;
+    const access = sys?.apiAccessToken;
+    const device = sys?.device?.deviceId;
+    if (!access || !device || !sys?.apiEndpoint) return undefined;
+    try {
+      const r = await (o.fetch ?? fetch)(`${sys.apiEndpoint}/v1/devices/${encodeURIComponent(device)}/settings/address`, { headers: { Authorization: `Bearer ${access}`, Accept: "application/json" } });
+      if (!r.ok) return undefined;
+      const j = (await r.json()) as Record<string, string | null | undefined>;
+      const zip = (j.postalCode ?? "").replace(/\D/g, "").slice(0, 5);
+      if (!j.addressLine1 || zip.length !== 5) return undefined;
+      return { address: [j.addressLine1, j.addressLine2, j.city, j.stateOrRegion].filter(Boolean).join(", "), zip };
+    } catch {
+      return undefined;
+    }
+  };
+  const askAddress = async (h: Input, s: Sell, lead: string) => {
+    const found = await deviceAddress(h);
+    if (found) {
+      s.address = found.address;
+      s.zip = found.zip;
+      s.step = "confirm_address";
+      return speak(h, `${lead}I’ll use the address set on this Alexa, in ZIP ${zipSaid(found.zip)}. Buyers see it only on their pickup pass, during their pickup window. Is that right?`, true, NEXT.confirm_address);
+    }
+    s.step = "address";
+    return h.responseBuilder
+      .speak(`${lead}I need your address so buyers can find your porch. They see it only on their pickup pass, during their window. You can let Stoop use this Alexa’s address in your Alexa app, then say continue. Or tell me your street address and ZIP code.`)
+      .reprompt(NEXT.address)
+      .withAskForPermissionsConsentCard([ADDRESS_PERMISSION])
+      .getResponse();
+  };
+
+  const sellHandlers: Alexa.RequestHandler[] = [
+    { canHandle: (h) => intent(h, "WorthIntent"), handle: (h) => voiceSell(h, slot(h, "item"), "worth") },
+    { canHandle: (h) => intent(h, "SellIntent"), handle: (h) => voiceSell(h, slot(h, "item"), "sell") },
+    // "Do you still need it?"  "No, I don't need it."  -> sell it.  "Yes" / "keep it" -> keep it.
+    { canHandle: (h) => intent(h, "AMAZON.NoIntent", "SellItIntent") && !!sellAt(h, "offer"), handle: (h) => askPrice(h, attrs(h).sell!) },
+    {
+      canHandle: (h) => intent(h, "AMAZON.YesIntent", "KeepIntent") && !!sellAt(h, "offer"),
+      handle: (h) => {
+        attrs(h).sell = undefined;
+        return speak(h, "Okay, keep it. Tell me whenever there’s something you’d like to sell.", true);
+      },
+    },
+    { canHandle: (h) => intent(h, "AMAZON.YesIntent", "SellItIntent") && !!sellAt(h, "price") && attrs(h).sell!.listMinor > 0, handle: (h) => setAsk(h, attrs(h).sell!, attrs(h).sell!.listMinor) },
+    { canHandle: (h) => intent(h, "AMAZON.NoIntent") && !!sellAt(h, "price"), handle: (h) => speak(h, "What price would you like?", true, NEXT.price) },
+    { canHandle: (h) => intent(h, "AMAZON.NoIntent") && !!sellAt(h, "floor"), handle: (h) => setFloor(h, attrs(h).sell!, undefined) },
+    {
+      // a number means whatever the last question asked for: the price, the lowest price, or the ZIP
+      canHandle: (h) => intent(h, "PriceIntent", "LinkShopIntent", "OfferIntent") && !!sellAt(h, "price", "floor", "zip"),
+      handle: async (h) => {
+        const s = attrs(h).sell!;
+        const said = slot(h, "price") ?? slot(h, "code") ?? "";
+        const n = Number(said.replace(/[^\d.]/g, ""));
+        if (!(n > 0)) return speak(h, NEXT[s.step], true);
+        if (s.step === "price") return setAsk(h, s, Math.round(n * 100));
+        if (s.step === "floor") return setFloor(h, s, Math.round(n * 100));
+        const zip = said.replace(/\D/g, "").padStart(5, "0").slice(0, 5);
+        s.zip = zip;
+        s.step = "confirm_address";
+        return speak(h, `I heard ${s.address}, ZIP ${zipSaid(zip)}. Is that right?`, true, NEXT.confirm_address);
+      },
+    },
+    {
+      canHandle: (h) => intent(h, "NameIntent") && !!sellAt(h, "name"),
+      handle: (h) => {
+        const s = attrs(h).sell!;
+        const n = (slot(h, "name") ?? "").trim();
+        if (!n) return speak(h, NEXT.name, true);
+        s.name = n.charAt(0).toUpperCase() + n.slice(1);
+        return askAddress(h, s, `Thanks, ${s.name}. `);
+      },
+    },
+    { canHandle: (h) => intent(h, "ContinueIntent") && !!sellAt(h, "address"), handle: (h) => askAddress(h, attrs(h).sell!, "") },
+    {
+      canHandle: (h) => intent(h, "AddressIntent") && !!sellAt(h, "address", "name", "confirm_address"),
+      handle: (h) => {
+        const s = attrs(h).sell!;
+        if (s.step === "name") return speak(h, NEXT.name, true);
+        const said = (slot(h, "address") ?? "").trim();
+        if (!said) return speak(h, NEXT.address, true);
+        const zip = /\b(\d{5})(?:-\d{4})?\b/.exec(said)?.[1];
+        s.address = said.replace(/\b\d{5}(?:-\d{4})?\b/, "").replace(/[\s,]+$/, "").trim();
+        if (!zip) {
+          s.step = "zip";
+          return speak(h, "And your ZIP code?", true, NEXT.zip);
+        }
+        s.zip = zip;
+        s.step = "confirm_address";
+        return speak(h, `I heard ${s.address}, ZIP ${zipSaid(zip)}. Is that right?`, true, NEXT.confirm_address);
+      },
+    },
+    {
+      canHandle: (h) => intent(h, "AMAZON.YesIntent") && !!sellAt(h, "confirm_address"),
+      handle: async (h) => {
+        const s = attrs(h).sell!;
+        if (!o.maker || !s.address || !s.zip) return speak(h, LINK_FIRST, true);
+        const r = await o.maker.open({ displayName: s.name ?? "My", address: s.address, zip: s.zip, porchInstructions: "On the porch, by the front door." }, userId(h));
+        if ("error" in r) return speak(h, r.error === "rate_limited" ? "You’ve opened several shops in the last hour. Please try again later." : "I couldn’t open your shop just now. Please try again in a minute.", true);
+        o.links.linkSeller(userId(h), r);
+        const l = ownShop(h);
+        if (!l) return speak(h, "I couldn’t open your shop just now. Please try again in a minute.", true);
+        s.itemId = undefined;
+        return listNow(h, l, s, "Your shop is open. ");
+      },
+    },
+    {
+      canHandle: (h) => intent(h, "AMAZON.NoIntent") && !!sellAt(h, "confirm_address"),
+      handle: (h) => {
+        attrs(h).sell!.step = "address";
+        return speak(h, "Okay. Tell me your street address and ZIP code.", true, NEXT.address);
+      },
+    },
+    {
+      // the owner's yes to the listing, then to the lowest price, one after the other
+      canHandle: (h) => intent(h, "AMAZON.YesIntent", "SellItIntent") && !!sellAt(h, "approve_list", "approve_floor") && !!attrs(h).pendingApprovalId,
+      handle: async (h) => {
+        const a = attrs(h);
+        const s = a.sell!;
+        const l = ownShop(h);
+        if (!l) return speak(h, LINK_FIRST, true);
+        const done = await callTool(l.handle, l.link.token, "confirm_action", { approvalId: a.pendingApprovalId, decision: "accept" });
+        a.pendingApprovalId = undefined;
+        if (done.isError) {
+          a.sell = undefined;
+          return speak(h, done.text, true);
+        }
+        if (s.step === "approve_list" && s.floorMinor) {
+          const m = await callTool(l.handle, l.link.token, "set_mandate", { item: s.title, floorDollars: s.floorMinor / 100 });
+          if (m.data.kind === "approval_required" && m.data.pendingActionId) {
+            a.pendingApprovalId = m.data.pendingActionId;
+            s.step = "approve_floor";
+            return speak(h, `${done.text} ${m.text}`, true, ASK_YES);
+          }
+          s.step = "out";
+          return speak(h, `${done.text} ${m.text} ${OUT_HINT}`, true);
+        }
+        s.step = "out";
+        return speak(h, `${done.text} ${OUT_HINT}`, true);
+      },
+    },
+    {
+      canHandle: (h) => intent(h, "AMAZON.NoIntent") && !!sellAt(h, "approve_list", "approve_floor") && !!attrs(h).pendingApprovalId,
+      handle: async (h) => {
+        const a = attrs(h);
+        const l = ownShop(h);
+        if (!l) return speak(h, LINK_FIRST, true);
+        const out = await callTool(l.handle, l.link.token, "confirm_action", { approvalId: a.pendingApprovalId, decision: "decline" });
+        a.pendingApprovalId = undefined;
+        a.sell = undefined;
+        return speak(h, out.text || "Okay.", true);
+      },
+    },
+    {
+      canHandle: (h) => intent(h, "ItsOutIntent"),
+      handle: async (h) => {
+        const l = linked(h);
+        if ("say" in l) return speak(h, l.say, true);
+        const s = attrs(h).sell;
+        const out = await callTool(l.handle, l.link.token, "photograph_item", s?.itemId ? { item: s.itemId } : {});
+        return speak(h, out.text, true);
+      },
+    },
+    {
+      canHandle: (h) => intent(h, "CameraIntent"),
+      handle: async (h) => {
+        const l = linked(h);
+        if ("say" in l) return speak(h, l.say, true);
+        const c = o.maker ? await o.maker.cameraCode(l.link.shop, l.link.token) : undefined;
+        if (!c) return speak(h, "Set up your porch camera from your shop page on the Stoop website.", true);
+        const digits = `<say-as interpret-as="digits">${c.code}</say-as>`;
+        return h.responseBuilder
+          .speak(`On an old phone, open the Stoop website and tap Porch Camera, then enter ${digits}. Again: ${digits}. It works once, for ten minutes, and it’s in your Alexa app too.`)
+          .withSimpleCard("Stoop porch camera", `On an old phone, open ${c.url.split("#")[0]} and enter ${c.code}. The code works once, for ten minutes.`)
+          .reprompt("What else can I do for your shop?")
+          .getResponse();
+      },
+    },
+    { canHandle: (h) => intent(h, "AMAZON.FallbackIntent") && !!attrs(h).sell, handle: (h) => speak(h, `Sorry, I didn’t catch that. ${NEXT[attrs(h).sell!.step]}`, true, NEXT[attrs(h).sell!.step]) },
+  ];
+
   const handlers: Alexa.RequestHandler[] = [
+    ...sellHandlers,
     ...buyerHandlers,
     {
       canHandle: (h) => Alexa.getRequestType(h.requestEnvelope) === "LaunchRequest",
       handle: (h) => {
         const l = linked(h);
-        if ("say" in l) return speak(h, `Welcome to Stoop. ${l.say}`, true, LINK_FIRST);
+        if ("say" in l)
+          return speak(
+            h,
+            o.links.get(userId(h)) ? `Welcome to Stoop. ${l.say}` : "Welcome to Stoop. I sell things from your porch for you. Tell me what you’d like to sell, like: sell my porch bench, or ask what something’s worth.",
+            true,
+            "What would you like to sell?",
+          );
         return speak(h, `Welcome back to ${l.link.name}. You can ask if you have any offers, how your sale is going, or what you’re selling.`, true);
       },
     },
@@ -336,11 +671,16 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
     },
     {
       canHandle: (h) => intent(h, "ListIntent"),
-      handle: (h) => {
+      handle: async (h) => {
         const item = slot(h, "item");
         const price = Number(slot(h, "price"));
         if (!item) return speak(h, "Which item should I put up for sale?", true);
-        return run(h, "list_items", { items: [item], ...(price > 0 ? { askDollars: price } : {}) });
+        const l = linked(h);
+        if ("say" in l) return voiceSell(h, item, "sell");
+        const out = await callTool(l.handle, l.link.token, "list_items", { items: [item], ...(price > 0 ? { askDollars: price } : {}) });
+        // not something they photographed: price it from their words instead
+        if (out.isError && out.data.code === "item_not_found") return voiceSell(h, item, "sell");
+        return answer(h, out);
       },
     },
     {

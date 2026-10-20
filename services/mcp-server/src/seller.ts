@@ -157,6 +157,100 @@ export function createSellerServer(ctx: StoopContext, actor: SellerActor, pendin
     },
   );
 
+  // ------------------------------------------------------------ describe_item
+  server.registerTool(
+    "describe_item",
+    {
+      title: "Price something I describe",
+      description:
+        "Price an item from the owner's own words, with no photo (selling by voice), e.g. \"my wooden porch bench, a few scratches\". Checks recalls and banned items. Then list_items puts it up for sale, and photograph_item adds a photo from the porch camera.",
+      inputSchema: z.object({ description: z.string().min(2).max(300).describe("What the owner said about the item") }),
+      outputSchema: z.object({
+        kind: z.literal("described"),
+        itemId: z.string(),
+        title: z.string(),
+        condition: z.string(),
+        listMinor: z.number(),
+        floorSuggestionMinor: z.number(),
+        priceSource: z.enum(["comps", "ai-estimate", "none"]),
+        blocked: z.boolean(),
+        blockedReason: z.string().optional(),
+      }),
+      annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ description }) => {
+      const a = await ctx.appraiser.appraiseDescription(description);
+      if (!a) return errorResult("Tell me what it is, like: a wooden porch bench with a few scratches.", "not_understood");
+      const item = await s.createItem({
+        householdId: actor.householdId,
+        title: a.identification.title,
+        category: a.identification.category,
+        condition: a.identification.condition,
+        photoHashes: [],
+        photoUrls: [],
+        priceBand: a.priceBand,
+        comps: a.comps,
+        compsConfidence: a.compsConfidence,
+        recall: a.recall,
+      });
+      const name = inSentence(item.title);
+      const art = /^[aeiou]/i.test(name) ? "an" : "a";
+      const speech = a.recall.blocked
+        ? `${a.recall.reason ?? `The ${name} can't be sold.`} ${a.recall.alternative ?? ""}`.trim()
+        : a.priceSource === "none"
+          ? `I don't have prices for ${art} ${name} yet. What would you like to ask for it?`
+          : a.priceSource === "ai-estimate"
+            ? `I'd estimate ${art} ${name} like yours sells for about ${$(a.priceBand.listMinor)} secondhand. That's an AI estimate. Want me to list it?`
+            : `${art === "a" ? "A" : "An"} ${name} like yours goes for about ${$(a.priceBand.listMinor)} secondhand, going by ${a.comps.length} similar listings. Want me to list it?`;
+      ctx.bus.emit({ type: "appraisal_done", at: ctx.now(), householdId: actor.householdId, totalMinor: a.priceBand.listMinor, count: 1, from: "words" });
+      return result(speech, {
+        kind: "described",
+        itemId: item.id,
+        title: item.title,
+        condition: item.condition,
+        listMinor: a.priceBand.listMinor,
+        floorSuggestionMinor: a.priceBand.floorSuggestionMinor,
+        priceSource: a.priceSource,
+        blocked: a.recall.blocked,
+        blockedReason: a.recall.reason,
+      });
+    },
+  );
+
+  // ------------------------------------------------------------ photograph_item
+  server.registerTool(
+    "photograph_item",
+    {
+      title: "Photograph it on the porch",
+      description: "Take an item's listing photo with the household's porch camera, once the item is where the camera can see it. Vision checks the photo shows the item before it goes on the listing.",
+      inputSchema: z.object({ item: z.string().min(1).optional().describe("Item name or id; default: the newest item without a photo") }),
+      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ item: name }) => {
+      const all = await items();
+      const it = name ? (all.find((i) => i.id === name) ?? matchByName([...all].reverse(), name, (i) => i.category)) : ([...all].reverse().find((i) => !i.photoUrls.length) ?? all.at(-1));
+      if (!it) return errorResult(name ? `I couldn't find ${name} in your shop.` : "There's nothing in your shop yet. Tell me what you'd like to sell.", "item_not_found");
+      const said = inSentence(it.title);
+      if (!ctx.porchPhoto) return errorResult("Add a photo on your shop page; this shop has no porch camera.", "no_camera");
+      const shot = await ctx.porchPhoto(actor.householdId, it.title);
+      if (!shot.ok) {
+        const why = {
+          no_camera: "Your porch camera isn't set up yet. Ask me to set up your porch camera, and I'll give you a code for an old phone.",
+          offline: "Your porch camera isn't answering. Check the camera page is still open on that phone.",
+          not_seen: `I can't see the ${said} on the porch yet. Put it where your camera can see it, then tell me it's out.`,
+        }[shot.reason];
+        return errorResult(why, shot.reason);
+      }
+      try {
+        await s.addItemPhoto(it.id, { hash: shot.hash, url: shot.url });
+      } catch (e) {
+        if (e instanceof SettlementError) return errorResult(e.humanMessage, e.code);
+        throw e;
+      }
+      return result(`Got it. The ${said} has its photo now; buyers see it on the listing.`, { kind: "photo", itemId: it.id, photoUrl: shot.url });
+    },
+  );
+
   // ------------------------------------------------------------ my_items
   server.registerTool(
     "my_items",

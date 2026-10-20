@@ -5,12 +5,12 @@
       "locales": {
         "en-US": {
           "name": "Stoop Shop",
-          "summary": "Sell things from your porch: hear offers, approve sales and follow pickups by voice.",
-          "description": "Stoop sells the things you photograph to people nearby. Its AI assistant prices them and haggles within your rules, and buyers pick up from your porch while you're out. Your money is released once your porch camera sees the item go. With this skill you can hear new offers, accept or decline them, set your lowest price and follow a pickup, hands free. Open a shop at the Stoop website first, then say: Alexa, open stoop shop, and tell it the six digit code from your shop page.",
+          "summary": "Sell things from your porch by voice: get a price, list it, approve offers and follow the pickup.",
+          "description": "Stoop sells the things you don't need to people nearby, and you never meet anyone. Ask what something is worth, say you'd like to sell it, set your price and the lowest you'd take, and Stoop opens your shop and lists it. Its AI assistant haggles with buyers within your rules and asks you before any sale. The buyer pays first; the money is held until your porch camera (an old phone at the window) sees them pick the item up. Your address is used only for pickups: Stoop reads it from your Alexa settings with your permission, and a buyer sees it only on their pickup pass, during their pickup window. Test payments only during this beta; nothing is charged.",
           "examplePhrases": [
-            "Alexa, open stoop shop",
-            "Alexa, ask stoop shop if I have any offers",
-            "Alexa, ask stoop shop how my sale is going"
+            "Alexa, ask stoop shop what my porch bench is worth",
+            "Alexa, ask stoop shop to sell my bike",
+            "Alexa, ask stoop shop if I have any offers"
           ],
           "keywords": [
             "sell",
@@ -26,7 +26,7 @@
         "US"
       ],
       "category": "SHOPPING",
-      "testingInstructions": "Open a shop at https://d29kyjvj1jibpu.cloudfront.net/sell, add a photo and list it, open the listing link in a second browser and make an offer. On the shop page, tap Get a Code under Alexa. Then: 'open stoop shop', say the six digits, 'do I have any offers', 'yes', 'yes', 'how is my sale going'. Payments are test-only; nothing is charged."
+      "testingInstructions": "Say: 'Alexa, ask stoop shop what my porch bench is worth', then 'no I don't need it', 'yes', 'forty', then a first name. Allow the address permission in the Alexa app and say 'continue' (or say a street address and ZIP), 'yes', 'yes', 'yes'. Then 'set up my camera' gives a one-time code for the camera page on an old phone; 'it's out' takes the listing photo. Buyers open the listing from the Stoop website. Payments are test-only; nothing is charged."
     },
     "apis": {
       "custom": {
@@ -38,10 +38,15 @@
     },
     "privacyAndCompliance": {
       "allowsPurchases": false,
-      "usesPersonalInfo": false,
+      "usesPersonalInfo": true,
       "isChildDirected": false,
       "isExportCompliant": true,
       "containsAds": false
-    }
+    },
+    "permissions": [
+      {
+        "name": "read::alexa:device:all:address"
+      }
+    ]
   }
 }

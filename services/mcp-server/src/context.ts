@@ -47,6 +47,8 @@ export interface StoopContext {
   publicBaseUrl: string;
   passBaseUrl: string;
   now(): number;
+  /** The household's porch camera takes an item's listing photo, checked by vision (hosted shops). */
+  porchPhoto?(householdId: string, itemTitle: string): Promise<{ ok: true; hash: string; url: string } | { ok: false; reason: "no_camera" | "offline" | "not_seen" }>;
 }
 
 export interface SellerActor {

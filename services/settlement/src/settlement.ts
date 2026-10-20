@@ -231,6 +231,27 @@ export class Settlement {
     return this.mustGet<Item>(K.item(itemId), "item_not_found");
   }
 
+  /**
+   * A photo added after the item was described by voice (the porch camera's listing photo). It goes
+   * first on the item and its listing. Not once someone is buying it: the buyer agreed to what they saw.
+   */
+  async addItemPhoto(itemId: string, photo: { hash: string; url: string }): Promise<Item> {
+    const item = await this.getItem(itemId);
+    const listings = (await this.d.store.list<Listing>("listing#")).filter((l) => l.itemId === itemId);
+    if (listings.some((l) => !["AWAITING_SELLER_OK", "LIVE", "RELISTED", "BLOCKED_RECALL", "WITHDRAWN", "EXPIRED"].includes(l.state)))
+      throw new SettlementError("item_in_sale", "Someone is already buying this, so its photos stay as they were", 409);
+    const photoHashes = [photo.hash, ...item.photoHashes.filter((h) => h !== photo.hash)].slice(0, 6);
+    const photoUrls = [photo.url, ...item.photoUrls.filter((u) => u !== photo.url)].slice(0, 6);
+    const next: Item = { ...item, photoHashes, photoUrls, itemHash: sha256Hex(`${item.title}|${item.category}|${photoHashes.join(",")}`) };
+    await this.d.store.put(K.item(item.id), next);
+    for (const l of listings) {
+      const updated = { ...l, photoUrls, version: l.version + 1, updatedAt: this.now() };
+      if (!(await this.d.store.put(K.listing(l.id), updated, { ifVersion: l.version }))) throw new SettlementError("conflict", "Listing changed", 409);
+    }
+    this.emit("item_photo_added", { itemId, title: item.title });
+    return next;
+  }
+
   async itemsForHousehold(householdId: string): Promise<Item[]> {
     return (await this.d.store.list<Item>("item#")).filter((i) => i.householdId === householdId).sort((a, b) => a.createdAt - b.createdAt);
   }

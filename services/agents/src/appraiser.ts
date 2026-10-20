@@ -100,6 +100,90 @@ export class BedrockPriceEstimator implements PriceEstimator {
   }
 }
 
+/** Turns what someone says about an item ("the wooden bench on the porch, a few scratches") into an identification. */
+export interface Describer {
+  readonly name: string;
+  describe(text: string): Promise<Identification | undefined>;
+}
+
+/** Condition from the person's own words; "light wear" when they said nothing about it. */
+export function conditionFromWords(t: string): Identification["condition"] {
+  if (/\b(broken|for parts|doesn'?t work|not working)\b/i.test(t)) return "D";
+  if (/\b(like new|brand new|never used|barely used|mint|unused)\b/i.test(t)) return "A";
+  if (/\b(worn|scratch\w*|stain\w*|scuff\w*|dent\w*|faded|well used|rough|chipped)\b/i.test(t)) return "C";
+  return "B";
+}
+
+const LEAD_WORDS = /^(?:my|the|our|an?|this|that|old)\s+/i;
+
+/** Offline: the catalog when the words match it, otherwise the person's own words become the title. */
+export class WordsDescriber implements Describer {
+  readonly name = "offline-words";
+  async describe(text: string): Promise<Identification | undefined> {
+    const said = text.trim().replace(/[.!?]+$/, "").replace(/\s+/g, " ");
+    if (said.length < 2) return undefined;
+    const e = matchCatalog(said);
+    let title = said.split(/,|\b(?:with|but|and it|it'?s|in (?:good|great|ok|okay|fair|bad|rough) (?:shape|condition))\b/i)[0]!.trim() || said;
+    while (LEAD_WORDS.test(title)) title = title.replace(LEAD_WORDS, "");
+    title = title.replace(/\s+(?:on|in|from|at|by|out of) (?:my|the|our) (?:front |back )?(?:porch|garage|basement|yard|house|attic|closet|shed|kitchen|room|bedroom|living room|stoop)\b/i, "").trim() || title;
+    return {
+      title: e?.title ?? (title.charAt(0).toUpperCase() + title.slice(1)).slice(0, 80),
+      category: e?.category ?? "other",
+      condition: conditionFromWords(said),
+      confidence: e ? "high" : "low",
+    };
+  }
+}
+
+/** Bedrock: a listing title, category and condition from the spoken description (no brand it wasn't told). */
+export class BedrockDescriber implements Describer {
+  readonly name: string;
+  private client: BedrockRuntimeClient;
+  constructor(
+    private modelId = modelIdFor("PLANNER"),
+    region = process.env.AWS_REGION ?? "us-east-1",
+  ) {
+    this.name = `bedrock-words:${modelId}`;
+    this.client = new BedrockRuntimeClient({ region });
+  }
+  async describe(text: string): Promise<Identification | undefined> {
+    const words = new WordsDescriber();
+    if (!takeModelCalls(1)) return words.describe(text);
+    try {
+      const out = await this.client.send(
+        new ConverseCommand({
+          modelId: this.modelId,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  text:
+                    'Someone described, out loud, a household item they want to sell. Turn it into a resale listing. Reply ONLY JSON: {"title":"<short listing title>","category":"<one word>","condition":"A|B|C|D","confidence":"high|low"}. ' +
+                    "Use only what they said: name a brand or model only if they did. Condition: A like new, B light wear, C visible wear, D for parts; B if they said nothing about it. " +
+                    `What they said: "${text.slice(0, 300).replace(/"/g, "'")}"`,
+                },
+              ],
+            },
+          ],
+          inferenceConfig: { maxTokens: 120, temperature: 0 },
+        }),
+      );
+      const reply = out.output?.message?.content?.map((c) => ("text" in c ? c.text : "")).join("") ?? "";
+      const j = JSON.parse(reply.match(/\{[\s\S]*\}/)?.[0] ?? "") as Partial<Identification>;
+      if (!j.title) return words.describe(text);
+      return {
+        title: j.title.slice(0, 80),
+        category: (j.category ?? "other").toLowerCase(),
+        condition: j.condition && ["A", "B", "C", "D"].includes(j.condition) ? j.condition : conditionFromWords(text),
+        confidence: j.confidence === "high" ? "high" : "low",
+      };
+    } catch {
+      return words.describe(text);
+    }
+  }
+}
+
 export interface Identifier {
   readonly name: string;
   identify(photo: PhotoInput): Promise<Identification | undefined>;
@@ -211,16 +295,22 @@ export function priceBand(comps: Comp[], condition: Identification["condition"])
 
 export class Appraiser {
   constructor(
-    private deps: { identifier: Identifier; comps: CompsProvider; recalls: RecallChecker; estimator?: PriceEstimator },
+    private deps: { identifier: Identifier; comps: CompsProvider; recalls: RecallChecker; estimator?: PriceEstimator; describer?: Describer },
   ) {}
 
   static offline(recalls: RecallChecker) {
-    return new Appraiser({ identifier: new CatalogIdentifier(), comps: new CachedComps(), recalls });
+    return new Appraiser({ identifier: new CatalogIdentifier(), comps: new CachedComps(), recalls, describer: new WordsDescriber() });
   }
 
   static forMode(recalls: RecallChecker, comps: CompsProvider = new CachedComps()) {
     const live = llmMode() === "bedrock";
-    return new Appraiser({ identifier: live ? new BedrockIdentifier() : new CatalogIdentifier(), comps, recalls, estimator: live ? new BedrockPriceEstimator() : undefined });
+    return new Appraiser({
+      identifier: live ? new BedrockIdentifier() : new CatalogIdentifier(),
+      comps,
+      recalls,
+      estimator: live ? new BedrockPriceEstimator() : undefined,
+      describer: live ? new BedrockDescriber() : new WordsDescriber(),
+    });
   }
 
   get identifierName() {
@@ -236,33 +326,43 @@ export class Appraiser {
         unidentified.push(p.name);
         continue;
       }
-      const comps = await this.deps.comps.find(id.title, id.category);
-      const recall = await this.deps.recalls.check(id.title, id.category);
-      const photoHash = createHash("sha256").update(p.bytes ?? p.name).digest("hex");
-      let band = comps.length ? priceBand(comps, id.condition) : undefined;
-      let priceSource: AppraisedItem["priceSource"] = band ? "comps" : "none";
-      let compsSource = this.deps.comps.name;
-      if (!band && this.deps.estimator) {
-        const est = await this.deps.estimator.estimate(id);
-        if (est) {
-          const list = roundTo5((est.lowMinor + est.highMinor) / 2);
-          band = { listMinor: list, quickSaleMinor: roundTo5(list * 0.8), floorSuggestionMinor: roundTo5(list * 0.7) };
-          priceSource = "ai-estimate";
-          compsSource = this.deps.estimator.name;
-        }
-      }
-      items.push({
-        photoName: p.name,
-        photoHash,
-        identification: id,
-        priceBand: band ?? { listMinor: 0, quickSaleMinor: 0, floorSuggestionMinor: 0 },
-        comps: comps.slice(0, 5),
-        compsConfidence: comps.length >= 3 ? "high" : "low",
-        compsSource,
-        priceSource,
-        recall,
-      });
+      items.push(await this.priced(id, p.name, createHash("sha256").update(p.bytes ?? p.name).digest("hex")));
     }
     return { items, unidentified };
+  }
+
+  /** Price something from what the person said about it, with no photo (selling by voice). */
+  async appraiseDescription(text: string): Promise<AppraisedItem | undefined> {
+    const id = await (this.deps.describer ?? new WordsDescriber()).describe(text);
+    return id ? this.priced(id, text.slice(0, 80), createHash("sha256").update(`said:${text}`).digest("hex")) : undefined;
+  }
+
+  /** Comparables, then an AI estimate when there are none, plus the recall check. */
+  private async priced(id: Identification, photoName: string, photoHash: string): Promise<AppraisedItem> {
+    const comps = await this.deps.comps.find(id.title, id.category);
+    const recall = await this.deps.recalls.check(id.title, id.category);
+    let band = comps.length ? priceBand(comps, id.condition) : undefined;
+    let priceSource: AppraisedItem["priceSource"] = band ? "comps" : "none";
+    let compsSource = this.deps.comps.name;
+    if (!band && this.deps.estimator) {
+      const est = await this.deps.estimator.estimate(id);
+      if (est) {
+        const list = roundTo5((est.lowMinor + est.highMinor) / 2);
+        band = { listMinor: list, quickSaleMinor: roundTo5(list * 0.8), floorSuggestionMinor: roundTo5(list * 0.7) };
+        priceSource = "ai-estimate";
+        compsSource = this.deps.estimator.name;
+      }
+    }
+    return {
+      photoName,
+      photoHash,
+      identification: id,
+      priceBand: band ?? { listMinor: 0, quickSaleMinor: 0, floorSuggestionMinor: 0 },
+      comps: comps.slice(0, 5),
+      compsConfidence: comps.length >= 3 ? "high" : "low",
+      compsSource,
+      priceSource,
+      recall,
+    };
   }
 }

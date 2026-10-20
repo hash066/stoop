@@ -3,7 +3,7 @@
 // its own Lambda; Ring webhook -> Lambda + EventBridge; scheduler -> Step Functions; store -> DynamoDB.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { generateKeyPairSync, randomBytes } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
@@ -277,6 +277,20 @@ export async function createStack(cfg: StackConfig) {
     publicBaseUrl: cfg.publicBaseUrl,
     passBaseUrl: cfg.passBaseUrl,
     now: () => clock.now(),
+    porchPhoto:
+      cfg.frameSource === "porchcam"
+        ? async (householdId, itemTitle) => {
+            const hh = await settlement.householdPublic(householdId);
+            if (!hh.ringDeviceId || !porchcam.has(hh.ringDeviceId)) return { ok: false, reason: "no_camera" };
+            const frame = await porchcam.getFrame(hh.ringDeviceId).catch(() => undefined);
+            if (!frame) return { ok: false, reason: "offline" };
+            const v = await vision.assess({ frame, itemTitle, placement: hh.porchInstructions }).catch(() => undefined);
+            if (v?.presence !== "present") return { ok: false, reason: "not_seen" };
+            const kept = photos.keep({ name: `${itemTitle}.jpg`, bytes: frame.bytes, mime: frame.mime });
+            bus.emit({ type: "listing_photo_taken", at: clock.now(), householdId, camera: hh.ringDeviceId });
+            return { ok: true, hash: createHash("sha256").update(kept.bytes!).digest("hex"), url: kept.url };
+          }
+        : undefined,
   };
 
   const mcp = mcpRouter(ctx, {

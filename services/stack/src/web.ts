@@ -333,6 +333,31 @@ export function webRouter(d: WebDeps) {
     }
     return c.json({ camera: id, camToken });
   });
+  // A one-time invitation for a new camera phone (10 minutes, single use). The site turns it into a
+  // 6-digit code or a QR; whoever redeems it first becomes this shop's camera, and nobody can after.
+  const camInvites = new Map<string, { householdId: string; exp: number }>();
+  web.post("/cam/invite", async (c) => {
+    const s = seller(c);
+    if (!s) return c.json({ error: "unauthorized" }, 401);
+    const t = d.now();
+    for (const [k, v] of camInvites) if (v.exp < t || v.householdId === s.householdId) camInvites.delete(k);
+    const secret = token("ci");
+    camInvites.set(secret, { householdId: s.householdId, exp: t + 10 * 60_000 });
+    return c.json({ secret, expiresAt: t + 10 * 60_000 });
+  });
+  web.post("/cam/claim", async (c) => {
+    const { secret } = (await c.req.json().catch(() => ({}))) as { secret?: string };
+    const inv = secret ? camInvites.get(secret) : undefined;
+    if (!inv || inv.exp < d.now()) return c.json({ error: "expired", message: "That code has expired or was already used. Get a new one." }, 410);
+    camInvites.delete(secret!);
+    const id = d.porchcam.register();
+    camOwner.set(id, inv.householdId);
+    await d.settlement.setHouseholdDevice(inv.householdId, id);
+    d.bus.emit({ type: "porchcam_registered", at: d.now(), camera: id, via: "one_time_code" });
+    const camToken = token("ck");
+    camTokens.set(camToken, { cam: id, householdId: inv.householdId });
+    return c.json({ camera: id, camToken });
+  });
   web.get("/cam/next", async (c) => {
     const a = camAuth(c, c.req.query("cam"));
     if (!a || !d.porchcam.has(a.cam)) return c.json({ error: "unauthorized" }, 401);

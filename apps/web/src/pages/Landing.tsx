@@ -30,6 +30,7 @@ export function Landing() {
             <Link to="/street" className="hide-s">
               Browse
             </Link>
+            <Link to="/camera">Porch Camera</Link>
             <Link to="/sell" className="btn sm">
               Open Your Shop
             </Link>

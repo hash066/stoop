@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { absorbFragment } from "./api.ts";
 import { Link, Nav, usePath } from "./ui.tsx";
 import { Camera } from "./pages/Camera.tsx";
+import { CameraPair } from "./pages/CameraPair.tsx";
 import { Item } from "./pages/Item.tsx";
 import { Landing } from "./pages/Landing.tsx";
 import { Pass } from "./pages/Pass.tsx";
@@ -28,6 +29,7 @@ function App() {
   if (path === "/sell") return <Sell />;
   if (path === "/street") return <Street />;
   if (path === "/me") return <Me />;
+  if (path === "/camera") return <CameraPair />;
   if (path === "/" || path === "") return <Landing />;
   return (
     <>

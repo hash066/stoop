@@ -35,12 +35,12 @@ const intent = (name: string, slots: Record<string, string> = {}) => ({
   type: "IntentRequest",
   intent: { name, confirmationStatus: "NONE", slots: Object.fromEntries(Object.entries(slots).map(([k, v]) => [k, { name: k, value: v, confirmationStatus: "NONE" }])) },
 });
-type Said = { speech: string; attrs: Record<string, unknown>; end?: boolean };
+type Said = { speech: string; attrs: Record<string, any>; end?: boolean; card?: string };
 async function say(post: (p: string, b: unknown) => Promise<Response>, request: Record<string, unknown>, attrs: Record<string, unknown> = {}): Promise<Said> {
   const res = await post("/alexa", envelope(request, attrs));
   expect(res.status).toBe(200);
-  const j = (await res.json()) as { response: { outputSpeech?: { ssml?: string }; shouldEndSession?: boolean }; sessionAttributes?: Record<string, unknown> };
-  return { speech: (j.response.outputSpeech?.ssml ?? "").replace(/<\/?speak>/g, ""), attrs: j.sessionAttributes ?? {}, end: j.response.shouldEndSession };
+  const j = (await res.json()) as { response: { outputSpeech?: { ssml?: string }; shouldEndSession?: boolean; card?: { type: string } }; sessionAttributes?: Record<string, unknown> };
+  return { speech: (j.response.outputSpeech?.ssml ?? "").replace(/<\/?speak>/g, ""), attrs: j.sessionAttributes ?? {}, end: j.response.shouldEndSession, card: j.response.card?.type };
 }
 
 /** Stateless MCP call into a shop, as the tests elsewhere do. */
@@ -54,6 +54,99 @@ async function tool(post: (p: string, b: unknown, h?: Record<string, string>) =>
 }
 
 describe("the Stoop skill on Alexa", () => {
+  it("sells by voice from nothing: worth, keep or sell, price, lowest, a shop at the Alexa address, then the porch photo", async () => {
+    let allowed = false;
+    const addressApi = (async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe("https://api.amazonalexa.com/v1/devices/amzn1.ask.device.test/settings/address");
+      expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer alexa-api-token");
+      if (!allowed) return new Response("{}", { status: 403 });
+      return Response.json({ addressLine1: "12 Elm St", city: "Springfield", stateOrRegion: "IL", postalCode: "62704-1234", countryCode: "US" });
+    }) as typeof fetch;
+    const present = { name: "stub", assess: async () => ({ presence: "present" as const, rationale: "stub", adapter: "stub" }) };
+    const { s, post } = await server({ alexaFetch: addressApi, stackOverrides: { recallChecker: rulesOnlyChecker(), frameDelayScale: 0, vision: present } });
+    const ask = async (request: Record<string, unknown>, attrs: Record<string, unknown> = {}) => {
+      const env = envelope(request, attrs);
+      (env.context.System as Record<string, unknown>).apiAccessToken = "alexa-api-token";
+      const res = await post("/alexa", env);
+      const j = (await res.json()) as { response: { outputSpeech?: { ssml?: string }; card?: { type: string; content?: string } }; sessionAttributes?: Record<string, any> };
+      return { speech: (j.response.outputSpeech?.ssml ?? "").replace(/<\/?speak>/g, ""), attrs: j.sessionAttributes ?? {}, card: j.response.card };
+    };
+
+    // "What's my jogging stroller worth?" ... "Do you still need it?" "Yes" keeps it
+    let r = await ask(intent("WorthIntent", { item: "my old jogging stroller, barely used" }));
+    expect(r.speech).toMatch(/goes for about \$\d+ secondhand\. Do you still need it\?/);
+    expect((await ask(intent("AMAZON.YesIntent"), r.attrs)).speech).toMatch(/keep it/);
+
+    // ... "No, I don't need it" sells it
+    r = await ask(intent("WorthIntent", { item: "my old jogging stroller, barely used" }));
+    r = await ask(intent("SellItIntent"), r.attrs);
+    expect(r.speech).toMatch(/Should I list it at \$\d+, or another price\?/);
+    r = await ask(intent("PriceIntent", { price: "120" }), r.attrs);
+    expect(r.speech).toMatch(/\$120 it is\. What’s the lowest you’d take\?/);
+    expect((await ask(intent("PriceIntent", { price: "150" }), r.attrs)).speech).toMatch(/more than your asking price/);
+    r = await ask(intent("LinkShopIntent", { code: "90" }), r.attrs); // a bare number is the answer to the last question
+    expect(r.speech).toMatch(/set up your Stoop shop\. What’s your first name\?/);
+
+    // no address permission yet: Alexa asks for it (a card in the Alexa app) or a spoken address
+    r = await ask(intent("NameIntent", { name: "ana" }), r.attrs);
+    expect(r.speech).toMatch(/Thanks, Ana\. I need your address/);
+    expect(r.card?.type).toBe("AskForPermissionsConsent");
+    allowed = true;
+    r = await ask(intent("ContinueIntent"), r.attrs);
+    expect(r.speech).toMatch(/address set on this Alexa, in ZIP <say-as interpret-as="digits">62704<\/say-as>.*only on their pickup pass/);
+    expect(r.speech).not.toMatch(/Elm/); // the street isn't read out loud
+
+    // "Yes": the shop opens and the listing waits for the owner's yes, then the lowest price does
+    r = await ask(intent("AMAZON.YesIntent"), r.attrs);
+    expect(r.speech).toMatch(/^Your shop is open\. List the three-wheel jogging stroller at \$120\?.*Say yes to approve/);
+    r = await ask(intent("AMAZON.YesIntent"), r.attrs);
+    expect(r.speech).toMatch(/live at \$120.*Never sell the three-wheel jogging stroller below \$90/);
+    r = await ask(intent("AMAZON.YesIntent"), r.attrs);
+    expect(r.speech).toMatch(/say: it’s out/);
+    const sellAttrs = r.attrs;
+
+    // a real shop now: Ana's, at the Alexa address, with the listing live and no photo yet
+    const shop = [...s.worlds.values()].find((w) => w.kind === "shop")!;
+    const store = (await (await s.app.fetch(new Request(`${ORIGIN}/s/${shop.id}/web/storefront`))).json()) as { displayName: string; zip: string; listings: Array<{ title: string; askMinor: number; photoUrl?: string }> };
+    expect(store).toMatchObject({ displayName: "Ana", zip: "62704", listings: [{ title: "Three-wheel jogging stroller", askMinor: 120_00 }] });
+    expect(store.listings[0]!.photoUrl).toBeUndefined();
+    expect((await ask(intent("OffersIntent"))).speech).not.toMatch(/six digits/); // this Alexa is linked to it
+
+    // "It's out" before there's a camera; "set up my camera" gives a one-time code for an old phone
+    expect((await ask(intent("ItsOutIntent"), sellAttrs)).speech).toMatch(/porch camera isn.t set up yet/);
+    r = await ask(intent("CameraIntent"));
+    const code = /interpret-as="digits">(\d{6})</.exec(r.speech)?.[1];
+    expect(code).toMatch(/^\d{6}$/);
+    expect(r.card?.content).toContain(`${ORIGIN}/camera and enter ${code}`);
+    expect((await post("/api/camera/pair", { code: "000000" })).status).toBe(404);
+    const paired = (await (await post("/api/camera/pair", { code })).json()) as { shop: string; camToken: string };
+    expect(paired).toMatchObject({ shop: shop.id, camToken: expect.stringMatching(/^ck_/) });
+    expect((await post("/api/camera/pair", { code })).status).toBe(404); // works once
+
+    // the camera phone sends what it sees; "It's out" puts that photo on the listing
+    const jpeg = `data:image/jpeg;base64,${Buffer.from("porch with a stroller").toString("base64")}`;
+    expect((await post(`/s/${shop.id}/web/cam/frame`, { dataUrl: jpeg }, { Authorization: `Bearer ${paired.camToken}` })).status).toBe(200);
+    expect((await ask(intent("ItsOutIntent"), sellAttrs)).speech).toMatch(/has its photo now/);
+    const after = (await (await s.app.fetch(new Request(`${ORIGIN}/s/${shop.id}/web/storefront`))).json()) as { listings: Array<{ photoUrl?: string }> };
+    expect(after.listings[0]!.photoUrl).toMatch(new RegExp(`^${ORIGIN}/s/${shop.id}/photos/`));
+  });
+
+  it("prices things it has no comparables for by asking the owner, and takes a spoken address", async () => {
+    const { post } = await server({ alexaFetch: (async () => new Response("{}", { status: 403 })) as unknown as typeof fetch });
+    let r = await say(post, intent("SellIntent", { item: "the wooden bench on my porch" }));
+    expect(r.speech).toMatch(/I don’t have prices for a wooden bench yet\. What would you like to ask for it\?/);
+    r = await say(post, intent("PriceIntent", { price: "40" }), r.attrs);
+    r = await say(post, intent("AMAZON.NoIntent"), r.attrs); // no lowest price: every offer comes to the owner
+    expect(r.speech).toMatch(/check every offer with you.*first name/);
+    r = await say(post, intent("NameIntent", { name: "bo" }), r.attrs);
+    r = await say(post, intent("AddressIntent", { address: "40 Oak Ave Springfield Illinois" }), r.attrs);
+    expect(r.speech).toMatch(/And your ZIP code\?/);
+    r = await say(post, intent("LinkShopIntent", { code: "62711" }), r.attrs);
+    expect(r.speech).toMatch(/I heard 40 Oak Ave Springfield Illinois, ZIP <say-as interpret-as="digits">62711<\/say-as>\. Is that right\?/);
+    r = await say(post, intent("AMAZON.YesIntent"), r.attrs);
+    expect(r.speech).toMatch(/Your shop is open\. List the wooden bench at \$40\?/);
+  });
+
   it("links a shop by code, reads the offer, and accepts it with two spoken yeses", async () => {
     const { post } = await server();
     const shop = (await (await post("/api/shops", { displayName: "Ana", address: "12 Elm St, Springfield, IL", zip: "62704", porchInstructions: "Bench" })).json()) as { id: string; sellerToken: string };
@@ -67,7 +160,7 @@ describe("the Stoop skill on Alexa", () => {
     await tool(post, shop.id, "buyer", buyer, "make_offer", { listingId, amountDollars: 95 });
 
     // not linked yet: Alexa explains how
-    expect((await say(post, { type: "LaunchRequest" })).speech).toMatch(/six digits/);
+    expect((await say(post, { type: "LaunchRequest" })).speech).toMatch(/sell my porch bench/);
     expect((await say(post, intent("OffersIntent"))).speech).toMatch(/six digits/);
 
     // the code from the shop page (only for that shop's own seller token)

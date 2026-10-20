@@ -227,6 +227,177 @@
             "buy it now",
             "pay now"
           ]
+        },
+        {
+          "name": "WorthIntent",
+          "slots": [
+            {
+              "name": "item",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "what is my {item} worth",
+            "what's my {item} worth",
+            "how much is my {item} worth",
+            "how much could I get for my {item}",
+            "how much can I get for my {item}",
+            "what would my {item} sell for",
+            "what could I sell my {item} for",
+            "value my {item}",
+            "price my {item}",
+            "what my {item} is worth"
+          ]
+        },
+        {
+          "name": "SellIntent",
+          "slots": [
+            {
+              "name": "item",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "sell my {item}",
+            "I want to sell my {item}",
+            "help me sell my {item}",
+            "list my {item}",
+            "get rid of my {item}",
+            "to sell my {item}",
+            "put my {item} up for sale",
+            "I'd like to sell my {item}"
+          ]
+        },
+        {
+          "name": "SellItIntent",
+          "samples": [
+            "sell it",
+            "go ahead and sell it",
+            "you can sell it",
+            "yes sell it",
+            "list it",
+            "I don't need it",
+            "no I don't need it",
+            "I don't need it anymore",
+            "no I don't need it anymore",
+            "I don't use it",
+            "I don't use it anymore",
+            "no I don't use it",
+            "get rid of it"
+          ]
+        },
+        {
+          "name": "KeepIntent",
+          "samples": [
+            "keep it",
+            "I still need it",
+            "yes I still need it",
+            "I still use it",
+            "I'll keep it",
+            "I want to keep it"
+          ]
+        },
+        {
+          "name": "PriceIntent",
+          "slots": [
+            {
+              "name": "price",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "{price} dollars",
+            "list it at {price}",
+            "list it at {price} dollars",
+            "list it for {price}",
+            "list it for {price} dollars",
+            "make it {price}",
+            "make it {price} dollars",
+            "ask {price} dollars",
+            "no lower than {price}",
+            "no lower than {price} dollars",
+            "no less than {price}",
+            "no less than {price} dollars",
+            "not below {price}",
+            "the lowest is {price}",
+            "the lowest is {price} dollars",
+            "{price} is the lowest",
+            "{price} dollars is the lowest",
+            "at least {price}",
+            "at least {price} dollars"
+          ]
+        },
+        {
+          "name": "NameIntent",
+          "slots": [
+            {
+              "name": "name",
+              "type": "AMAZON.FirstName"
+            }
+          ],
+          "samples": [
+            "my name is {name}",
+            "I'm {name}",
+            "call me {name}",
+            "it's {name}",
+            "{name}"
+          ]
+        },
+        {
+          "name": "AddressIntent",
+          "slots": [
+            {
+              "name": "address",
+              "type": "AMAZON.PostalAddress"
+            }
+          ],
+          "samples": [
+            "my address is {address}",
+            "I live at {address}",
+            "the address is {address}",
+            "it's at {address}",
+            "{address}"
+          ]
+        },
+        {
+          "name": "ContinueIntent",
+          "samples": [
+            "continue",
+            "done",
+            "I allowed it",
+            "I've allowed it",
+            "I did it",
+            "okay I did it",
+            "I gave permission"
+          ]
+        },
+        {
+          "name": "ItsOutIntent",
+          "samples": [
+            "it's out",
+            "it's on the porch",
+            "I put it out",
+            "I put it on the porch",
+            "it's outside",
+            "take the photo",
+            "take a photo",
+            "take its photo",
+            "take a picture of it",
+            "photograph it"
+          ]
+        },
+        {
+          "name": "CameraIntent",
+          "samples": [
+            "set up my camera",
+            "set up my porch camera",
+            "set up a porch camera",
+            "connect my camera",
+            "connect a camera",
+            "connect my porch camera",
+            "add a porch camera",
+            "I need a porch camera"
+          ]
         }
       ],
       "types": [

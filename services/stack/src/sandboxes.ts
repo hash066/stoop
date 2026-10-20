@@ -13,14 +13,17 @@
 //   GET /api/admin/shops, DELETE /api/admin/shops/:id   (?key=ADMIN_KEY) list shops, close a test shop
 //   POST /alexa                the Stoop Alexa skill's endpoint (Alexa Skills Kit; signed requests only)
 //   POST /api/alexa/pair       a 6-digit code that links a shop to someone's Alexa
-import { generateKeyPairSync, randomBytes } from "node:crypto";
+//   POST /api/camera/code      a one-time 6-digit code (and QR link) for a new porch-camera phone
+//   POST /api/camera/pair      the camera phone redeems that code once; GET /camera is its page
+import { createHash, generateKeyPairSync, randomBytes, randomInt } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { extname, join, normalize, sep } from "node:path";
 import { Hono, type Context } from "hono";
 import { modelCallsToday } from "@stoop/shared";
+import { Appraiser, cpscChecker } from "@stoop/agents";
 import type { RequestEnvelope } from "ask-sdk-model";
 import { SkillRequestSignatureVerifier, TimestampVerifier } from "ask-sdk-express-adapter";
-import { AlexaLinks, createStoopSkill } from "./alexa.ts";
+import { AlexaLinks, createStoopSkill, type ShopMaker } from "./alexa.ts";
 import { marketListings, searchMarket, Street, streetRouter, type StreetWorld } from "./street.ts";
 import { z } from "zod";
 import { createStack, type Stack, type StackConfig, type WorldSecrets, type WorldState } from "./compose.ts";
@@ -45,6 +48,8 @@ export interface SandboxServerOptions {
   alexaSkillId?: string;
   /** Check Amazon's request signature and timestamp on /alexa (default on; tests turn it off). */
   alexaVerify?: boolean;
+  /** Tests: stands in for Alexa's Device Address API. */
+  alexaFetch?: typeof fetch;
   /** How often buyer agents look at the street (default 20 s). */
   agentTickMs?: number;
   /** More origins every world accepts (local recordings that put each device on its own port). */
@@ -299,20 +304,18 @@ export async function createSandboxServer(o: SandboxServerOptions) {
   app.get("/shop/:id/*", webApp);
 
   // ---------- real shops
-  app.post("/api/shops", async (c) => {
-    const body = await c.req.json().catch(() => undefined);
-    const key = `shop:${ipOf(c)}`;
-    if (!under(key, shopsPerIp)) return c.json({ error: "rate_limited", message: "You've opened several shops in the last hour. Try again later." }, 429);
+  /** Opens a real shop (the web form, or Alexa by voice). `key` rate-limits whoever is asking. */
+  const openShop = async (body: unknown, origin: string, key: string) => {
+    if (!under(key, shopsPerIp)) return { status: 429 as const, error: "rate_limited", message: "You've opened several shops in the last hour. Try again later." };
     sweep();
-    if (count("shop") >= maxShops) return c.json({ error: "full", message: "Stoop is at capacity for this test. Try again tomorrow." }, 503);
+    if (count("shop") >= maxShops) return { status: 503 as const, error: "full", message: "Stoop is at capacity for this test. Try again tomorrow." };
     const id = randomBytes(6).toString("base64url");
-    const origin = originOf(c);
     const stack = await shopStack(id, origin);
     const res = await stack.app.fetch(new Request(`${origin}/web/shop`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) }));
     const out = (await res.json()) as { sellerToken?: string; fields?: string[] };
     if (!res.ok || !out.sellerToken) {
       stack.stop();
-      return c.json({ error: "invalid", fields: out.fields ?? [] }, 400);
+      return { status: 400 as const, error: "invalid", fields: out.fields ?? [] };
     }
     const t = now();
     const w: World = { id, kind: "shop", stack, createdAt: t, lastSeen: t, origin };
@@ -323,7 +326,55 @@ export async function createSandboxServer(o: SandboxServerOptions) {
     } catch {
       /* the next save round retries */
     }
-    return c.json({ id, sellerToken: out.sellerToken, url: `/shop/${id}` });
+    return { status: 200 as const, id, sellerToken: out.sellerToken };
+  };
+  app.post("/api/shops", async (c) => {
+    const r = await openShop(await c.req.json().catch(() => undefined), originOf(c), `shop:${ipOf(c)}`);
+    if (r.status !== 200) {
+      const { status, ...err } = r;
+      return c.json(err, status);
+    }
+    return c.json({ id: r.id, sellerToken: r.sellerToken, url: `/shop/${r.id}` });
+  });
+
+  // ---------- porch-camera pairing: a 6-digit code (or its QR) works once, for 10 minutes
+  const cameraCodes = new Map<string, { shop: string; secret: string; exp: number }>();
+  const cameraCode = async (shop: string, token: string) => {
+    const w = worlds.get(shop);
+    if (!w || w.kind !== "shop") return undefined;
+    const res = await w.stack.app.fetch(new Request(`${w.origin}/web/cam/invite`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: "{}" }));
+    if (!res.ok) return undefined;
+    const { secret } = (await res.json()) as { secret: string };
+    const t = now();
+    for (const [k, v] of cameraCodes) if (v.exp < t || v.shop === shop) cameraCodes.delete(k);
+    let code: string;
+    do code = String(randomInt(100000, 1000000));
+    while (cameraCodes.has(code));
+    cameraCodes.set(code, { shop, secret, exp: t + 10 * 60_000 });
+    return { code, url: `${w.origin}/camera#c=${code}` };
+  };
+  app.get("/camera", webApp);
+  app.post("/api/camera/code", async (c) => {
+    const { shop, token } = (await c.req.json().catch(() => ({}))) as { shop?: string; token?: string };
+    const r = shop && token ? await cameraCode(shop, token) : undefined;
+    if (!r) return c.json({ error: "unauthorized" }, 401);
+    return c.json({ ...r, expiresInMinutes: 10 });
+  });
+  app.post("/api/camera/pair", async (c) => {
+    // a 6-digit code is guessable only by brute force: a few tries per address, then wait
+    const key = `campair:${ipOf(c)}`;
+    if (!under(key, 12)) return c.json({ error: "rate_limited", message: "Too many tries. Wait a while, then get a new code." }, 429);
+    record(key);
+    const code = String(((await c.req.json().catch(() => ({}))) as { code?: unknown }).code ?? "").replace(/\D/g, "");
+    const e = cameraCodes.get(code);
+    if (!e || e.exp < now()) return c.json({ error: "bad_code", message: "That code didn't work. Codes work once, for ten minutes." }, 404);
+    cameraCodes.delete(code);
+    const w = worlds.get(e.shop);
+    if (!w || w.kind !== "shop") return c.json({ error: "sandbox_expired", message: "That shop has closed." }, 410);
+    const res = await w.stack.app.fetch(new Request(`${w.origin}/web/cam/claim`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ secret: e.secret }) }));
+    const j = (await res.json()) as { camToken?: string; error?: string; message?: string };
+    if (!res.ok || !j.camToken) return c.json({ error: j.error ?? "bad_code", message: j.message ?? "That code didn't work." }, 410);
+    return c.json({ shop: e.shop, camToken: j.camToken });
   });
 
   // ---------- the Alexa+ device tour (demo worlds)
@@ -372,9 +423,29 @@ export async function createSandboxServer(o: SandboxServerOptions) {
   );
 
   // ---------- the Stoop skill on a real Alexa
+  // selling by voice before there's a shop: a quote from the same appraiser, then a shop opened for them
+  const quoter = Appraiser.forMode(cpscChecker());
+  // the site's public address as Alexa reached it (shops opened by voice live there too)
+  let skillOrigin = o.origin?.replace(/\/$/, "") ?? "http://localhost";
+  const maker: ShopMaker = {
+    quote: async (description) => {
+      const a = await quoter.appraiseDescription(description);
+      return a && { title: a.identification.title, listMinor: a.priceBand.listMinor, floorSuggestionMinor: a.priceBand.floorSuggestionMinor, priceSource: a.priceSource, blocked: a.recall.blocked, blockedReason: a.recall.reason };
+    },
+    open: async (input, who) => {
+      const r = await openShop(input, skillOrigin, `shop:alexa:${createHash("sha256").update(who).digest("hex").slice(0, 16)}`);
+      if (r.status !== 200) return { error: r.error };
+      const w = worlds.get(r.id)!;
+      const s = w.stack.sellers.get(r.sellerToken)!;
+      return { shop: r.id, token: r.sellerToken, name: `${(await w.stack.settlement.householdPublic(s.householdId)).displayName}’s shop` };
+    },
+    cameraCode,
+  };
   const skill = createStoopSkill({
     skillId: o.alexaSkillId,
     links,
+    maker,
+    fetch: o.alexaFetch,
     street: {
       search: async (q, maxMinor) => searchMarket(await marketListings(worlds.values() as Iterable<StreetWorld>), { query: q, maxMinor }),
       buyerToken: async (profileId, shop) => {
@@ -399,6 +470,7 @@ export async function createSandboxServer(o: SandboxServerOptions) {
   const timestamp = new TimestampVerifier();
   app.post("/alexa", async (c) => {
     if (!o.alexaSkillId) return c.json({ error: "not_found" }, 404);
+    skillOrigin = originOf(c);
     const raw = await c.req.text();
     if (o.alexaVerify !== false) {
       const headers: Record<string, string> = {};

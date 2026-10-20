@@ -21,6 +21,16 @@ export class LocalPhotoStore implements PhotoStore {
     return stored;
   }
 
+  /** A photo that isn't part of a sweep (the porch camera's listing photo). */
+  keep(photo: { name: string; bytes: Uint8Array; mime: string }): SweepPhoto {
+    const clean = stripMetadata(photo.bytes, photo.mime);
+    const id = createHash("sha256").update(clean).digest("hex").slice(0, 16);
+    const ext = photo.mime.includes("png") ? "png" : "jpg";
+    const kept: SweepPhoto = { id, name: photo.name, url: `${this.publicBase}/photos/${id}.${ext}`, mime: photo.mime, bytes: clean };
+    this.byId.set(id, kept);
+    return kept;
+  }
+
   get(id: string) {
     return this.byId.get(id);
   }

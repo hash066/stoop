@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { act, api, ApiError, base, clock, dollars, inSentence, isPhone, money, request, tokens, toJpeg } from "../api.ts";
+import { act, api, ApiError, base, clock, dollars, inSentence, isPhone, money, postJson, request, tokens, toJpeg } from "../api.ts";
 import { ApprovalPrompt, Composer, Thread, useConversation } from "../conversation.tsx";
 import { Alert, Camera, Check, External, Phone, Qr, Receipt, Share as ShareIcon, Spark, Upload, Voice } from "../icons.tsx";
 import { Closed, CopyButton, initials, Link, Loading, navigate, Nav, QR, ShareButton, Spinner, usePoll, useTitle, useToast } from "../ui.tsx";
@@ -770,16 +770,17 @@ function Frames({ shop, token, sale }: { shop: string; token: string; sale: Sale
 // ---------- side panels
 
 function CameraPanel({ shop, token, camera }: { shop: string; token: string; camera: SellerState["shop"]["camera"] }) {
-  const [link, setLink] = useState("");
+  const [pair, setPair] = useState<{ code: string; url: string; until: number }>();
   const [err, setErr] = useState("");
   const on = !!camera?.online;
+  // a one-time code (also as a QR): it works once, for ten minutes, so a photo of it is useless later
   const phoneLink = async () => {
     setErr("");
     try {
-      const r = await api<{ camToken: string }>(shop, "/web/cam/register", { token, body: {} });
-      setLink(`${location.origin}/shop/${shop}/camera#ck=${r.camToken}`);
+      const r = await request<{ code: string; url: string; expiresInMinutes: number }>("/api/camera/code", postJson({ shop, token }));
+      setPair({ code: r.code, url: r.url, until: Date.now() + r.expiresInMinutes * 60_000 });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Couldn’t make a camera link.");
+      setErr(e instanceof Error ? e.message : "Couldn’t make a camera code.");
     }
   };
   return (
@@ -804,11 +805,17 @@ function CameraPanel({ shop, token, camera }: { shop: string; token: string; cam
             : "Connected. Keep that page open while you have things for sale."
           : "An old phone or a laptop at a window that sees where you leave things. It checks the item is there before a pickup and gone after."}
       </p>
-      {link ? (
+      {pair ? (
         <div className="stack-s">
-          <QR text={link} label="QR code that opens the porch camera page on your phone" />
-          <p className="tiny">Scan with the phone you’ll leave at the window. The link only works as this shop’s camera.</p>
-          <CopyButton text={link} label="Copy Camera Link" className="btn on-dark sm" />
+          <QR text={pair.url} label="QR code that connects a phone as this shop's porch camera" />
+          <p className="small">
+            Scan it with the phone you’ll leave at the window. Or open Stoop on that phone, tap Porch Camera and enter{" "}
+            <strong className="num" style={{ letterSpacing: "0.12em", color: "var(--sun)" }}>
+              {pair.code.slice(0, 3)} {pair.code.slice(3)}
+            </strong>
+            .
+          </p>
+          <p className="tiny">It works once, until {clock(pair.until)}. The phone that uses it becomes this shop’s only camera.</p>
         </div>
       ) : (
         <div className="row">
