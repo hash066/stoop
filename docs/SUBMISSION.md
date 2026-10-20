@@ -89,6 +89,18 @@ From `docs/FRICTION_LOG.md` (24 entries), for example:
 - A Ring Appstore private-use beta (up to 10 accounts) with real households.
 - Ring hardware as the porch camera for households that have it (the client and webhooks are built), and AgentCore Memory for seller preferences.
 
+## Mini challenges (paste into the Devpost form)
+
+**Open Source**
+- **Contribution URLs:** https://github.com/AmazonAppDev/ring-api-helloworld/pull/36 (issue https://github.com/AmazonAppDev/ring-api-helloworld/issues/35) and https://www.npmjs.com/package/proof-of-handoff (source: https://github.com/hash066/stoop/tree/main/packages/proof-of-handoff)
+- **Project repository:** https://github.com/hash066/stoop
+- **GitHub username:** hash066
+- **What we did, how it works, why it matters:**
+  - **Media helpers for Amazon's Ring starter (PR #36, 340 lines, 7 tests).** The starter had no way to download snapshots or clips. Snapshots answer `303 See Other` with a pre-signed URL, and following it naively sends the Ring bearer token to a third-party host; our helpers and Next.js route follow it without the token, and a test asserts the token never leaks. Clips answer `416 MEDIA_NOT_FOUND` / `425 RECORDING_NOT_READY` while processing; the helper retries every 10 s up to a limit and caps the duration at 15 minutes, as the docs require. Stdlib-only tests with a fake session, no new dependencies.
+  - **`proof-of-handoff` (new, MIT, on npm).** A receipt format for a contactless porch handoff (pickup window, check-in, camera evidence as SHA-256 hashes, never images or addresses), signed as a compact JWS (ES256 over RFC 8785 canonical JSON). `verifyReceipt` checks algorithm, type, signature, schema and canonical bytes with an explicit reason for each failure; `npx proof-of-handoff verify <receipt> --jwks <keys>` does it from the command line; `derToRawP256` converts AWS KMS ECDSA signatures to JWS form, which every team otherwise rewrites. It lets anyone check that a pickup happened without trusting the marketplace. Tested in the repo, and installed from the registry into a clean folder before submission.
+
+**AWS Builder** (goes in the Product Feedback answer): Amazon Bedrock (Nova 2 Lite) for every model role (pricing photos, porch-camera vision, the negotiator, the host planner); Strands Agents for the negotiator, running on Amazon Bedrock AgentCore Runtime; AWS KMS for receipt signing, single-use capability tokens and an address key only one Lambda can decrypt; AWS Lambda, DynamoDB, Step Functions and SQS for Settlement's AWS deployment (a full sale verified on it; the live sites keep their shops on the instance's disk for now); EC2 and CloudFront for both live sites; AWS CDK for all of it, with a $30 budget that stops the instance and denies Bedrock; Kiro for the Policy Kernel's spec. Details and verified status per service: `docs/AWS_BUILDER.md`; feedback per service: `docs/PRODUCT_FEEDBACK.md`.
+
 ## Market context (cite or cut)
 
 - US recommerce ≈ $229B in 2025: OfferUp report (industry-sponsored). TODO: link.
