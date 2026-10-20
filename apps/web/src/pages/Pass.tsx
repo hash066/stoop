@@ -1,4 +1,5 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { platformAuthenticatorIsAvailable, startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { api, ApiError, base, clock, deviceId, money, tokens, until } from "../api.ts";
 import { Camera, Check, Clock, Lock, Phone, Pin, Receipt } from "../icons.tsx";
 import { Closed, Loading, Nav, usePoll, useTitle } from "../ui.tsx";
@@ -16,6 +17,13 @@ interface PassView {
   checkedIn: boolean;
   address?: string;
   porchInstructions?: string;
+  /** Only after check-in, inside the window, on this phone. */
+  lockbox?: string;
+  hasLockbox?: boolean;
+  /** The buyer locked this pass with a passkey (their face or fingerprint on this phone). */
+  passkey?: boolean;
+  /** Locked and not unlocked in the last few minutes: no address, no lockbox code, no check-in. */
+  locked?: boolean;
   verdict?: string;
   inspectionEndsAt?: number;
   receiptIds: string[];
@@ -148,6 +156,7 @@ export function Pass({ shop, passId }: { shop: string; passId: string }) {
             </>
           ) : (
             <>
+              {view.locked ? <Unlock shop={shop} passId={passId} device={device} onDone={() => void load()} /> : null}
               {view.address ? (
                 <div className="row" style={{ gap: 14, alignItems: "flex-start", flexWrap: "nowrap" }}>
                   <span className="step-n">
@@ -164,12 +173,94 @@ export function Pass({ shop, passId }: { shop: string; passId: string }) {
                   </div>
                 </div>
               ) : null}
-              <Status view={view} inWindow={inWindow} busy={busy} err={err} doing={doing} shop={shop} passId={passId} device={device} />
+              {!view.passkey && !view.locked ? <LockOffer shop={shop} passId={passId} device={device} onDone={() => void load()} /> : null}
+              {view.locked ? null : <Status view={view} inWindow={inWindow} busy={busy} err={err} doing={doing} shop={shop} passId={passId} device={device} />}
             </>
           )}
         </div>
       </div>
     </Frame>
+  );
+}
+
+/** A passkey on this phone (the buyer's face or fingerprint). It never leaves the phone; Stoop keeps only its public key. */
+function LockOffer(p: { shop: string; passId: string; device: string; onDone(): void }) {
+  const [can, setCan] = useState(false);
+  const [hide, setHide] = useState(false);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void platformAuthenticatorIsAvailable()
+      .then(setCan)
+      .catch(() => setCan(false));
+  }, []);
+  if (!can || hide) return null;
+  const lock = async () => {
+    setErr("");
+    setBusy(true);
+    try {
+      const optionsJSON = await api<Parameters<typeof startRegistration>[0]["optionsJSON"]>(p.shop, `/pass/${p.passId}/lock/options`, { device: p.device, body: {} });
+      const response = await startRegistration({ optionsJSON });
+      await api(p.shop, `/pass/${p.passId}/lock`, { device: p.device, body: response });
+      p.onDone();
+    } catch (e) {
+      setErr(e instanceof Error && e.name !== "NotAllowedError" ? e.message : "That didn’t finish. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card stack-s" style={{ padding: 18 }}>
+      <p className="small">
+        <strong>Lock this pass with your face or fingerprint.</strong> Then only you, on this phone, can see the address and check in.
+      </p>
+      {err ? (
+        <p className="err" role="alert">
+          {err}
+        </p>
+      ) : null}
+      <div className="row">
+        <button className="btn sm" type="button" disabled={busy} onClick={() => void lock()}>
+          <Lock /> Lock My Pass
+        </button>
+        <button className="link tiny" type="button" onClick={() => setHide(true)}>
+          Not now
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Unlock(p: { shop: string; passId: string; device: string; onDone(): void }) {
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const unlock = async () => {
+    setErr("");
+    setBusy(true);
+    try {
+      const optionsJSON = await api<Parameters<typeof startAuthentication>[0]["optionsJSON"]>(p.shop, `/pass/${p.passId}/unlock/options`, { device: p.device, body: {} });
+      const response = await startAuthentication({ optionsJSON });
+      await api(p.shop, `/pass/${p.passId}/unlock`, { device: p.device, body: response });
+      p.onDone();
+    } catch (e) {
+      setErr(e instanceof Error && e.name !== "NotAllowedError" ? e.message : "That didn’t finish. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="stack">
+      <h2 style={{ fontSize: "var(--t-l)" }}>Your pass is locked</h2>
+      <p className="muted small">Unlock it with your face or fingerprint to see the address and check in. It stays open for ten minutes.</p>
+      {err ? (
+        <p className="err" role="alert">
+          {err}
+        </p>
+      ) : null}
+      <button className="btn xl block" type="button" disabled={busy} onClick={() => void unlock()}>
+        <Lock /> Unlock
+      </button>
+    </div>
   );
 }
 
@@ -245,6 +336,14 @@ function Status(p: { view: PassView; inWindow: boolean; busy: boolean; err: stri
           <Check />
           <span>You’re checked in. Take the item now.</span>
         </p>
+        {view.lockbox ? (
+          <div className="card attn stack-s" role="status">
+            <span className="tiny">Lockbox code</span>
+            <strong className="num" style={{ fontSize: "2.5rem", letterSpacing: "0.15em" }}>
+              {view.lockbox}
+            </strong>
+          </div>
+        ) : null}
         <p className="muted small">
           {s === "STILL_THERE"
             ? "The camera still sees the item on the porch. Once you’ve taken it, it checks again on its own."
@@ -253,10 +352,12 @@ function Status(p: { view: PassView; inWindow: boolean; busy: boolean; err: stri
       </div>
     );
   if (!p.inWindow) return <p className="note">Check-in opens during your pickup window.</p>;
+  const lockNote = view.hasLockbox ? <p className="muted small">The item is in a lockbox. Its code appears here when you tap I’m Here.</p> : null;
   return (
     <div className="stack">
       <h2 style={{ fontSize: "var(--t-l)" }}>At the porch, tap this first. Then take the item.</h2>
       <p className="muted small">If the item leaves the porch before you tap, Stoop treats it as taken by someone else and cancels your payment.</p>
+      {lockNote}
       {err}
       <button className="btn xl block" style={{ minHeight: 88, fontSize: "1.875rem" }} type="button" disabled={p.busy} onClick={() => p.doing(() => api(shop, `/pass/${passId}/checkin`, { device, body: {} }))}>
         I’m Here

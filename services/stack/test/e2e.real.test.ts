@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import type { VisionAdapter } from "@stoop/verifier";
 import { bootStack, http, waitFor } from "./harness.ts";
+import { softPasskey } from "./webauthn.ts";
 import type { Stack } from "../src/index.ts";
 
 // Stand-in for the vision model: reads markers in the frame bytes (the real one is Bedrock)
@@ -36,14 +37,20 @@ async function call(stack: Stack, role: "seller" | "buyer", token: string, name:
 
 describe("real two-device flow with a porch camera (no demo data)", () => {
   it("shop -> photos -> list -> buyer joins -> pays -> claims pass -> porch camera verifies", async () => {
-    const stack = await bootStack({ seedDemo: false, frameSource: "porchcam", vision });
+    let skew = 0; // lets the test step past the pass's Face ID unlock
+    const stack = await bootStack({ seedDemo: false, frameSource: "porchcam", vision, clock: { now: () => Date.now() + skew } });
     const run = { on: true, scene: "ITEM on the porch" };
     try {
       // Seller: a shop with a real pickup address (encrypted; never in any reply)
       expect((await http(stack, "POST", "/web/shop", { displayName: "Ana", address: "x" })).status).toBe(400);
-      const shop = await http(stack, "POST", "/web/shop", { displayName: "Ana", address: "12 Elm St, Springfield, IL", zip: "62704", porchInstructions: "On the bench, left of the door" });
+      const shop = await http(stack, "POST", "/web/shop", { displayName: "Ana", address: "12 Elm St, Springfield, IL", zip: "62704", porchInstructions: "On the bench, left of the door", lockboxCode: "4219" });
       expect(shop.status).toBe(200);
       const seller = shop.json.sellerToken as string;
+      // the lockbox code is stored like the address: the shop knows one is set, never what it is
+      const st0 = (await http(stack, "GET", "/web/seller/state", undefined, { Authorization: `Bearer ${seller}` })).json;
+      expect(st0.shop.lockbox).toBe(true);
+      expect(JSON.stringify(st0)).not.toMatch(/4219/);
+      expect((await http(stack, "POST", "/web/lockbox", { code: "x" }, { Authorization: `Bearer ${seller}` })).status).toBe(400);
       expect((await http(stack, "POST", "/web/shop", { displayName: "Eve", address: "1 Other St", zip: "11111", porchInstructions: "x" })).status).toBe(409);
 
       await http(stack, "POST", "/sweep", { photos: [{ name: "jogging-stroller.jpg", dataUrl: img("stroller photo") }] }, { Authorization: `Bearer ${seller}` });
@@ -99,11 +106,38 @@ describe("real two-device flow with a porch camera (no demo data)", () => {
       expect((await http(stack, "POST", `/web/pass/${passId}/claim`, {}, { Authorization: `Bearer ${seller}`, ...dev })).status).toBe(401);
       expect((await http(stack, "POST", `/web/pass/${passId}/claim`, {}, { Authorization: `Bearer ${buyer}`, ...dev })).status).toBe(200);
       await http(stack, "POST", `/pass/${passId}/consent`, {}, dev);
-      expect((await http(stack, "GET", `/pass/${passId}`, undefined, dev)).json.address).toBe("12 Elm St, Springfield, IL");
+      const beforeCheckIn = (await http(stack, "GET", `/pass/${passId}`, undefined, dev)).json;
+      expect(beforeCheckIn).toMatchObject({ address: "12 Elm St, Springfield, IL", hasLockbox: true });
+      expect(beforeCheckIn.lockbox).toBeUndefined(); // only after "I'm here"
+
+      // The buyer locks the pass with Face ID (a passkey that stays on their phone). Afterwards the
+      // address, the lockbox code and the check-in need a fresh unlock on that same phone.
+      const phone = softPasskey("http://localhost:5180");
+      expect((await http(stack, "POST", `/pass/${passId}/lock/options`, {}, { "X-Stoop-Device": "someone-elses-phone" })).status).toBe(403);
+      const lockOpts = (await http(stack, "POST", `/pass/${passId}/lock/options`, {}, dev)).json;
+      expect(lockOpts.authenticatorSelection).toMatchObject({ authenticatorAttachment: "platform", userVerification: "required" });
+      expect((await http(stack, "POST", `/pass/${passId}/lock`, phone.register(lockOpts), dev)).json).toMatchObject({ locked: true });
+      expect((await http(stack, "GET", `/pass/${passId}`, undefined, dev)).json).toMatchObject({ passkey: true, locked: false, address: "12 Elm St, Springfield, IL" });
+      skew = 11 * 60_000; // the unlock lasts ten minutes
+      const locked = (await http(stack, "GET", `/pass/${passId}`, undefined, dev)).json;
+      expect(locked).toMatchObject({ passkey: true, locked: true });
+      expect(locked.address).toBeUndefined();
+      expect((await http(stack, "POST", `/pass/${passId}/checkin`, {}, dev)).status).toBe(423);
+      // a response without user verification (no Face ID, no fingerprint) doesn't unlock it
+      const opts1 = (await http(stack, "POST", `/pass/${passId}/unlock/options`, {}, dev)).json;
+      expect((await http(stack, "POST", `/pass/${passId}/unlock`, phone.authenticate(opts1, { verified: false }), dev)).status).toBe(400);
+      // nor does replaying an old answer; a fresh Face ID does
+      const opts2 = (await http(stack, "POST", `/pass/${passId}/unlock/options`, {}, dev)).json;
+      const answer = phone.authenticate(opts2);
+      expect((await http(stack, "POST", `/pass/${passId}/unlock`, answer, dev)).status).toBe(200);
+      expect((await http(stack, "POST", `/pass/${passId}/unlock`, answer, dev)).status).toBe(410);
+      expect((await http(stack, "GET", `/pass/${passId}`, undefined, dev)).json).toMatchObject({ locked: false, address: "12 Elm St, Springfield, IL" });
 
       // At the door: the buyer taps "I'm here" first (a pickup without a check-in is treated as
       // someone else taking the item), takes it, and the camera's motion frame shows a person
       expect((await http(stack, "POST", `/pass/${passId}/checkin`, {}, dev)).status).toBe(200);
+      expect((await http(stack, "GET", `/pass/${passId}`, undefined, dev)).json.lockbox).toBe("4219");
+      expect((await http(stack, "GET", `/pass/${passId}`, undefined, { "X-Stoop-Device": "someone-elses-phone" })).status).toBe(403);
       run.scene = "empty porch";
       await http(stack, "POST", "/web/cam/frame", { dataUrl: img("PERSON at the door"), motion: true }, camAuth);
       await waitFor(async () => ((await stack.store.get<{ ringEvents: unknown[] }>(`evidence#${dealId}`))?.ringEvents ?? []).length > 0, 5000, "presence", stack);

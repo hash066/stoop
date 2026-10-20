@@ -56,9 +56,9 @@ export function Sell() {
               e.preventDefault();
               const form = e.currentTarget;
               const f = new FormData(form);
-              const body = Object.fromEntries(["displayName", "address", "zip", "porchInstructions"].map((k) => [k, String(f.get(k) ?? "").trim()]));
+              const body = Object.fromEntries(["displayName", "address", "zip", "porchInstructions", "lockboxCode"].map((k) => [k, String(f.get(k) ?? "").trim()]));
               const local = Object.entries(body)
-                .filter(([k, v]) => !v || (k === "address" && v.length < 5) || (k === "zip" && !/^[A-Za-z0-9 -]{3,10}$/.test(v)))
+                .filter(([k, v]) => (k === "lockboxCode" ? !!v && !/^[A-Za-z0-9 -]{3,12}$/.test(v) : !v || (k === "address" && v.length < 5) || (k === "zip" && !/^[A-Za-z0-9 -]{3,10}$/.test(v))))
                 .map(([k]) => k);
               setErrors(local);
               setFailure("");
@@ -87,6 +87,14 @@ export function Sell() {
             <Field name="address" label="Pickup address" autoComplete="street-address" hint="Street, city and state, as a buyer would type it into a map." errors={errors} />
             <Field name="zip" label="ZIP code" autoComplete="postal-code" inputMode="numeric" hint="Shown on your listings." errors={errors} width="14ch" />
             <Field name="porchInstructions" label="Where you’ll leave things" hint="For example: “On the bench, left of the front door.”" errors={errors} multiline />
+            <Field
+              name="lockboxCode"
+              label="Lockbox code (optional)"
+              hint="Leave things in a combination lockbox? The buyer’s phone shows this code only after they tap I’m Here at your porch. Change it after each sale."
+              autoComplete="off"
+              errors={errors}
+              width="14ch"
+            />
             {failure ? (
               <p className="err" role="alert">
                 {failure}

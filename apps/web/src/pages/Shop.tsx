@@ -60,7 +60,7 @@ interface Sale {
   buyer: string;
 }
 interface SellerState {
-  shop: { displayName: string; zip: string; porchInstructions: string; camera: { id: string; online: boolean; lastFrameAt?: number } | null };
+  shop: { displayName: string; zip: string; porchInstructions: string; camera: { id: string; online: boolean; lastFrameAt?: number } | null; lockbox?: boolean };
   items: ShopItem[];
   offers: Offer[];
   conversations: Conversation[];
@@ -217,6 +217,7 @@ function Dashboard({ shop, token }: { shop: string; token: string }) {
 
           <aside className="stack" style={{ ["--gap" as string]: "16px" }}>
             <CameraPanel shop={shop} token={token} camera={st.shop.camera} />
+            <LockboxPanel shop={shop} token={token} on={!!st.shop.lockbox} onChange={refresh} />
             {cfg.alexaSkill ? <AlexaPanel shop={shop} token={token} /> : null}
             <SharePanel shop={shop} name={st.shop.displayName} hasLive={live.length > 0} />
             <AssistantPanel shop={shop} token={token} onChange={refresh} />
@@ -827,6 +828,81 @@ function CameraPanel({ shop, token, camera }: { shop: string; token: string; cam
           <button className={isPhone() && !on ? "btn" : "btn on-dark"} type="button" onClick={() => navigate(`/shop/${shop}/camera`)}>
             {on ? "Use This Device Instead" : "Use This Device"}
           </button>
+        </div>
+      )}
+      {err ? (
+        <p className="err" role="alert">
+          {err}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/** An optional combination lockbox: its code is encrypted like the address and reaches only the buyer's phone, after check-in. */
+function LockboxPanel({ shop, token, on, onChange }: { shop: string; token: string; on: boolean; onChange(): void }) {
+  const [editing, setEditing] = useState(false);
+  const [code, setCode] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async (value: string) => {
+    setErr("");
+    if (value && !/^[A-Za-z0-9 -]{3,12}$/.test(value)) {
+      setErr("Use 3 to 12 letters or digits.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api(shop, "/web/lockbox", { token, body: { code: value } });
+      setEditing(false);
+      setCode("");
+      onChange();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "That didn’t save.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="card stack" aria-labelledby="lock-h">
+      <div className="spread">
+        <h2 id="lock-h" style={{ fontSize: "var(--t-m)" }}>
+          Lockbox
+        </h2>
+        <span className={`badge ${on ? "sun" : ""}`}>{on ? "Code set" : "Optional"}</span>
+      </div>
+      <p className="muted small">
+        Leave things in a combination lockbox, and the buyer’s phone shows its code only after they tap I’m Here at your porch, during their window. Nobody else ever sees it, not even Stoop’s AI.
+      </p>
+      {editing ? (
+        <form
+          className="row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save(code.trim());
+          }}
+        >
+          <label htmlFor="lock-code" className="sr-only">
+            Lockbox code
+          </label>
+          <input id="lock-code" className="input num" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" maxLength={12} style={{ maxWidth: "14ch" }} aria-invalid={!!err} />
+          <button className="btn sm" type="submit" disabled={busy}>
+            Save
+          </button>
+          <button className="btn ghost sm" type="button" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <div className="row">
+          <button className="btn soft sm" type="button" onClick={() => setEditing(true)}>
+            {on ? "Change Code" : "Add a Lockbox Code"}
+          </button>
+          {on ? (
+            <button className="link tiny" type="button" disabled={busy} onClick={() => void save("")}>
+              Remove
+            </button>
+          ) : null}
         </div>
       )}
       {err ? (

@@ -32,6 +32,8 @@ const ShopInput = z.object({
   address: z.string().trim().min(5).max(200),
   zip: z.string().trim().regex(/^[A-Za-z0-9 -]{3,10}$/),
   porchInstructions: z.string().trim().min(1).max(300),
+  /** Optional: a combination lockbox's code; the buyer's pass shows it only after check-in. */
+  lockboxCode: z.union([z.literal(""), z.string().trim().regex(/^[A-Za-z0-9 -]{3,12}$/)]).optional(),
 });
 const ReviewInput = z.object({
   dealId: z.string().min(1),
@@ -92,7 +94,7 @@ export function webRouter(d: WebDeps) {
     if (d.sellers.size > 0) return c.json({ error: "shop_exists", message: "This shop is already set up." }, 409);
     const p = ShopInput.safeParse(await c.req.json().catch(() => undefined));
     if (!p.success) return c.json({ error: "invalid", fields: p.error.issues.map((i) => i.path.join(".")) }, 400);
-    const hh = await d.settlement.createHousehold(p.data);
+    const hh = await d.settlement.createHousehold({ ...p.data, lockboxCode: p.data.lockboxCode || undefined });
     const t = token("sk");
     d.sellers.set(t, { kind: "seller", householdId: hh.id, displayName: hh.displayName });
     return c.json({ sellerToken: t, householdId: hh.id });
@@ -202,7 +204,7 @@ export function webRouter(d: WebDeps) {
     const sales = [];
     for (const deal of deals.sort((a, b) => b.createdAt - a.createdAt)) sales.push({ ...(await saleView(deal)), buyer: await label(deal.buyerId) });
     return c.json({
-      shop: { displayName: hh.displayName, zip: hh.zip, porchInstructions: hh.porchInstructions, camera: cameraOf(hh.ringDeviceId) },
+      shop: { displayName: hh.displayName, zip: hh.zip, porchInstructions: hh.porchInstructions, camera: cameraOf(hh.ringDeviceId), lockbox: hh.lockbox },
       items: items.map((it) => {
         const l = listings.filter((x) => x.itemId === it.id).sort((a, b) => b.updatedAt - a.updatedAt)[0];
         return {
@@ -309,6 +311,17 @@ export function webRouter(d: WebDeps) {
     } catch (e) {
       return c.json({ error: "bind_failed", message: e instanceof Error ? e.message : "Couldn't open this pass on this device." }, 409);
     }
+  });
+
+  // ---- lockbox code: set, change or remove (empty). Encrypted like the address.
+  web.post("/lockbox", async (c) => {
+    const s = seller(c);
+    if (!s) return c.json({ error: "unauthorized" }, 401);
+    const code = String(((await c.req.json().catch(() => ({}))) as { code?: unknown }).code ?? "").trim();
+    if (code && !/^[A-Za-z0-9 -]{3,12}$/.test(code)) return c.json({ error: "invalid", fields: ["code"], message: "Use 3 to 12 letters or digits." }, 400);
+    await d.settlement.setLockboxCode(s.householdId, code || undefined);
+    d.bus.emit({ type: "lockbox_set", at: d.now(), on: !!code });
+    return c.json({ ok: true, lockbox: !!code });
   });
 
   // ---- porch camera

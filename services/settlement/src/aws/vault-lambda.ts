@@ -8,8 +8,11 @@ import { storeBoundary, type AddressBoundary } from "../boundary.ts";
 import { DynamoStore } from "./dynamo.ts";
 import { kmsVault } from "./kms.ts";
 
-export type VaultRequest = { op: "checkOutgoing"; listingId: string; text: string } | { op: "revealForPass"; passId: string; deviceId: string };
-export type VaultResponse = LeakCheck | { address: string | null };
+export type VaultRequest =
+  | { op: "checkOutgoing"; listingId: string; text: string }
+  | { op: "revealForPass"; passId: string; deviceId: string }
+  | { op: "revealLockboxForPass"; passId: string; deviceId: string };
+export type VaultResponse = LeakCheck | { address: string | null } | { lockbox: string | null };
 
 let boundary: AddressBoundary | undefined;
 
@@ -24,6 +27,8 @@ export async function handler(event: VaultRequest): Promise<VaultResponse> {
       return boundary.checkOutgoing(event.listingId, event.text);
     case "revealForPass":
       return { address: (await boundary.revealForPass(event.passId, event.deviceId)) ?? null };
+    case "revealLockboxForPass":
+      return { lockbox: (await boundary.revealLockboxForPass(event.passId, event.deviceId)) ?? null };
     default:
       throw new Error("vault: unknown op");
   }
@@ -41,6 +46,9 @@ export function lambdaBoundary(lambda: LambdaClient, functionName: string): Addr
     checkOutgoing: (listingId, text) => call<LeakCheck>({ op: "checkOutgoing", listingId, text }),
     async revealForPass(passId, deviceId) {
       return (await call<{ address: string | null }>({ op: "revealForPass", passId, deviceId })).address ?? undefined;
+    },
+    async revealLockboxForPass(passId, deviceId) {
+      return (await call<{ lockbox: string | null }>({ op: "revealLockboxForPass", passId, deviceId })).lockbox ?? undefined;
     },
   };
 }

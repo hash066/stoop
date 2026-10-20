@@ -162,6 +162,7 @@ export class Settlement {
     address: string;
     zip: string;
     porchInstructions: string;
+    lockboxCode?: string;
     ringDeviceId?: string;
     id?: string;
   }): Promise<Household> {
@@ -171,11 +172,19 @@ export class Settlement {
       addressCipher: await this.d.vault.encrypt(input.address),
       zip: input.zip,
       porchInstructions: input.porchInstructions,
+      lockboxCipher: input.lockboxCode ? await this.d.vault.encrypt(input.lockboxCode) : undefined,
       ringDeviceId: input.ringDeviceId,
       createdAt: this.now(),
     };
     await this.d.store.put(K.household(h.id), h);
     return h;
+  }
+
+  /** Set, change or (empty) remove the lockbox code. Change it after each sale. */
+  async setLockboxCode(householdId: string, code: string | undefined) {
+    const h = await this.mustGet<Household>(K.household(householdId), "household_not_found");
+    h.lockboxCipher = code ? await this.d.vault.encrypt(code) : undefined;
+    await this.d.store.put(K.household(h.id), h);
   }
 
   async setHouseholdDevice(householdId: string, ringDeviceId: string) {
@@ -258,7 +267,7 @@ export class Settlement {
 
   async householdPublic(householdId: string) {
     const h = await this.mustGet<Household>(K.household(householdId), "household_not_found");
-    return { id: h.id, displayName: h.displayName, zip: h.zip, ringDeviceId: h.ringDeviceId, porchInstructions: h.porchInstructions };
+    return { id: h.id, displayName: h.displayName, zip: h.zip, ringDeviceId: h.ringDeviceId, porchInstructions: h.porchInstructions, lockbox: !!h.lockboxCipher };
   }
 
   async passIdForDeal(dealId: string) {
@@ -831,6 +840,11 @@ export class Settlement {
     return { pass, url, otp };
   }
 
+  /** The phone a pass is bound to, if any (for the pass's Face ID lock). */
+  async passDevice(passId: string): Promise<string | undefined> {
+    return (await this.d.store.get<Pass>(K.pass(passId)))?.deviceId;
+  }
+
   private async getPass(passId: string) {
     return this.mustGet<Pass>(K.pass(passId), "pass_not_found");
   }
@@ -874,6 +888,7 @@ export class Settlement {
     const hh = await this.mustGet<Household>(K.household(deal.householdId), "household_not_found");
     let address: string | undefined;
     let porchInstructions: string | undefined;
+    let lockbox: string | undefined;
     const input = revealInput(p, deal, deviceId, this.now());
     if (input) {
       // The pass polls; audit only when the outcome changes (first reveal, or access ending).
@@ -886,6 +901,7 @@ export class Settlement {
         // the boundary re-checks R2 from stored state before it decrypts
         address = await this.boundary.revealForPass(p.id, deviceId);
         porchInstructions = hh.porchInstructions;
+        if (p.checkInAt !== undefined && hh.lockboxCipher) lockbox = await this.boundary.revealLockboxForPass(p.id, deviceId);
       }
     }
     const receipts = await Promise.all(deal.receiptIds.map((id) => this.mustGet<ReceiptRecord>(K.receipt(id), "receipt_not_found")));
@@ -900,6 +916,8 @@ export class Settlement {
       checkedIn: p.checkInAt !== undefined,
       address,
       porchInstructions,
+      lockbox,
+      hasLockbox: !!hh.lockboxCipher,
       verdict: deal.verdict,
       inspectionEndsAt: deal.verifiedAt ? deal.verifiedAt + INSPECTION_MS : undefined,
       receiptIds: receipts.map((r) => r.id),

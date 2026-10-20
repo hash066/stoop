@@ -18,6 +18,8 @@ export interface Household {
   /** Public, coarse location only. */
   zip: string;
   porchInstructions: string;
+  /** A combination lockbox's code, encrypted like the address. Shown only on the bound pass, after check-in. */
+  lockboxCipher?: string;
   ringDeviceId?: string;
   createdAt: number;
 }

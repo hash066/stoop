@@ -13,6 +13,8 @@ export interface AddressBoundary {
   checkOutgoing(listingId: string, text: string): Promise<LeakCheck>;
   /** The address for a pass page, only if R2 allows it now (re-checked from stored state). */
   revealForPass(passId: string, deviceId: string): Promise<string | undefined>;
+  /** The lockbox code, only once the buyer has checked in on the bound pass, inside the window. */
+  revealLockboxForPass(passId: string, deviceId: string): Promise<string | undefined>;
 }
 
 const TERMINAL = ["CLOSED", "VOIDED", "CHECKOUT_ABANDONED", "CAPTURED", "PAYOUT_RECORDED"];
@@ -56,6 +58,15 @@ export function storeBoundary(d: { store: Store; vault: Vault; now: () => number
       if (!input || decide(input).outcome !== "allow") return undefined;
       const hh = await must<Household>(K.household(deal.householdId));
       return d.vault.decrypt(hh.addressCipher);
+    },
+    async revealLockboxForPass(passId, deviceId) {
+      const p = await must<Pass>(K.pass(passId));
+      if (p.checkInAt === undefined) return undefined;
+      const deal = await must<Deal>(K.deal(p.dealId));
+      const input = revealInput(p, deal, deviceId, d.now());
+      if (!input || decide(input).outcome !== "allow") return undefined;
+      const hh = await must<Household>(K.household(deal.householdId));
+      return hh.lockboxCipher ? d.vault.decrypt(hh.lockboxCipher) : undefined;
     },
   };
 }

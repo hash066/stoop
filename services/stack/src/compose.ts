@@ -29,6 +29,7 @@ import {
 import { awsSettlementDeps, type AwsWiring } from "@stoop/settlement/aws";
 import { BedrockVision, LabelVision, Verifier, type VisionAdapter } from "@stoop/verifier";
 import { LocalPhotoStore, LocalPreferenceMemory } from "./memory.ts";
+import { PassLocks } from "./passkeys.ts";
 import { PorchCamSource } from "./porchcam.ts";
 import { AgentCoreNegotiator, agentPortRouter, PortGrants } from "./agentcore.ts";
 import { takeModelCalls } from "@stoop/shared";
@@ -370,13 +371,26 @@ export async function createStack(cfg: StackConfig) {
     await settlement.consentPass(c.req.param("id"), device(c.req.header("X-Stoop-Device")));
     return c.json({ ok: true });
   });
-  app.get("/pass/:id", async (c) => c.json(await settlement.passView(c.req.param("id"), device(c.req.header("X-Stoop-Device")))));
+  // Face or fingerprint (a passkey): a locked pass shows the address and lockbox code, and checks in, only right after an unlock
+  const passLocks = new PassLocks({ store, origin: cfg.allowedOrigins[0] ?? cfg.publicBaseUrl, now: () => clock.now(), boundDevice: (id) => settlement.passDevice(id) });
+  app.route("/pass", passLocks.router(device));
+  const LOCKED = { error: "locked", message: "Unlock your pass with your face or fingerprint first." };
+  app.get("/pass/:id", async (c) => {
+    const id = c.req.param("id");
+    const dev = device(c.req.header("X-Stoop-Device"));
+    const view = await settlement.passView(id, dev);
+    const passkey = await passLocks.locked(id);
+    if (!passkey || (await passLocks.open(id, dev))) return c.json({ ...view, passkey, locked: false });
+    return c.json({ ...view, address: undefined, porchInstructions: undefined, lockbox: undefined, passkey, locked: true });
+  });
   app.post("/pass/:id/checkin", async (c) => {
+    if (!(await passLocks.open(c.req.param("id"), device(c.req.header("X-Stoop-Device"))))) return c.json(LOCKED, 423);
     const d = await settlement.checkIn(c.req.param("id"), device(c.req.header("X-Stoop-Device")));
     await runDue(clock.now());
     return c.json({ state: d.state });
   });
   app.post("/pass/:id/outcome", async (c) => {
+    if (!(await passLocks.open(c.req.param("id"), device(c.req.header("X-Stoop-Device"))))) return c.json(LOCKED, 423);
     const { outcome, note } = (await c.req.json()) as { outcome: "got_it" | "not_as_described" | "not_received"; note?: string };
     const d = await settlement.buyerOutcome(c.req.param("id"), device(c.req.header("X-Stoop-Device")), outcome, note);
     return c.json({ state: d.state });
