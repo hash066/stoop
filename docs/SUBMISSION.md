@@ -19,7 +19,7 @@
 
 TODO(team): one sentence of the real story.
 
-AI agents already sell for people. In late September 2026 a Big Tech shopping agent reportedly negotiated a Marketplace sale without the owner's approval and gave a stranger the seller's address ([The Next Web](https://thenextweb.com/news/meta-muse-facebook-marketplace-address-buyer-robb)). Listing and haggling with AI is a crowded space. The part nobody has made safe is the handoff: who gets your address, when the money moves, and what proves the item actually left your porch.
+AI agents already sell for people. In late September 2026 a seller said Meta's Muse agent shared his home address with a Marketplace buyer and agreed to a lowball price; the buyer turned up at 9:15 pm while he was out. The company disputes parts of the account and says it is looking into it ([The Next Web, 28 Sep 2026](https://thenextweb.com/news/meta-muse-facebook-marketplace-address-buyer-robb)). Listing and haggling with AI is a crowded space. The part nobody has made safe is the handoff: who gets your address, when the money moves, and what proves the item actually left your porch.
 
 ## What it does
 
