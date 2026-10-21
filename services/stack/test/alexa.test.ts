@@ -143,7 +143,7 @@ describe("the Stoop skill on Alexa", () => {
     r = await say(post, intent("MandateIntent", { price: "1262704" }), waiting); // an address misheard as a price
     expect(r.speech).toMatch(/^I didn.t catch your address\. Say: my address is/);
     expect(r.attrs).toEqual(waiting);
-    r = await say(post, intent("StreetAddressIntent", { address: "40 Oak Ave Springfield Illinois" }), r.attrs);
+    r = await say(post, intent("StreetAddressIntent", { street: "40 Oak Ave Springfield Illinois" }), r.attrs);
     expect(r.speech).toMatch(/And your ZIP code\?/);
     r = await say(post, intent("LinkShopIntent", { code: "62711" }), r.attrs);
     expect(r.speech).toMatch(/I heard 40 Oak Ave Springfield Illinois, ZIP <say-as interpret-as="digits">62711<\/say-as>\. Is that right\?/);

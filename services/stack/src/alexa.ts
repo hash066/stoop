@@ -530,7 +530,7 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
       handle: (h) => {
         const s = attrs(h).sell!;
         if (s.step === "name") return speak(h, NEXT.name, true);
-        const said = (slot(h, "address") ?? "").trim();
+        const said = (slot(h, "address") ?? slot(h, "street") ?? "").trim();
         if (!said) return speak(h, NEXT.address, true);
         const zip = /\b(\d{5})(?:-\d{4})?\b/.exec(said)?.[1];
         s.address = said.replace(/\b\d{5}(?:-\d{4})?\b/, "").replace(/[\s,]+$/, "").trim();

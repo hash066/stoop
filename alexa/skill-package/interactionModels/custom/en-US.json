@@ -359,18 +359,18 @@
           "name": "StreetAddressIntent",
           "slots": [
             {
-              "name": "address",
+              "name": "street",
               "type": "AMAZON.SearchQuery"
             }
           ],
           "samples": [
-            "my address is {address}",
-            "I live at {address}",
-            "the address is {address}",
-            "it's at {address}",
-            "my street address is {address}",
-            "my home address is {address}",
-            "our address is {address}"
+            "my address is {street}",
+            "I live at {street}",
+            "the address is {street}",
+            "it's at {street}",
+            "my street address is {street}",
+            "my home address is {street}",
+            "our address is {street}"
           ]
         },
         {
