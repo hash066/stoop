@@ -17,8 +17,6 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { rulesOnlyChecker } from "@stoop/agents";
-import { createSandboxServer } from "../src/sandboxes.ts";
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../..");
 const require = createRequire(join(root, "package.json"));
@@ -34,6 +32,95 @@ const PORT = Number(arg("--port", "8797"));
 const BASE = `http://localhost:${PORT}`;
 mkdirSync(OUT, { recursive: true });
 const work = mkdtempSync(join(process.env.TMP ?? tmpdir(), "stoop-video-"));
+
+// ---------------------------------------------------------------- every real AWS call, with timing
+// The SDK sends its requests through node:https, so wrapping request() sees every call the app makes
+// to Amazon Bedrock, AgentCore and the rest, without touching the app. The video shows this log.
+const awsCalls: Array<{ t: number; service: string; op: string; detail: string; ms: number; status: number }> = [];
+{
+  const https = require("node:https") as typeof import("node:https");
+  const orig = https.request;
+  (https as unknown as { request: unknown }).request = function (this: unknown, ...a: unknown[]) {
+    const req = (orig as (...x: unknown[]) => import("node:http").ClientRequest).apply(this, a);
+    try {
+      const o = (typeof a[0] === "string" || a[0] instanceof URL ? new URL(String(a[0])) : (a[0] as { hostname?: string; host?: string; path?: string })) as { hostname?: string; host?: string; path?: string; pathname?: string };
+      const host = String(o.hostname ?? o.host ?? "");
+      if (host.endsWith(".amazonaws.com")) {
+        const t0 = Date.now();
+        const path = decodeURIComponent(String(o.path ?? o.pathname ?? ""));
+        req.on("response", (res) => {
+          res.on("close", () => {
+            const service = host.split(".")[0]!;
+            const model = /\/model\/([^/]+)\/(\w+)/.exec(path);
+            const rt = /runtimes\/arn:aws:bedrock-agentcore:[^/]*:\d+:runtime\/([^/]+)\/invocations/.exec(path);
+            awsCalls.push({
+              t: t0 / 1000,
+              service,
+              op: model ? model[2]![0]!.toUpperCase() + model[2]!.slice(1) : rt ? "InvokeAgentRuntime" : path.split("?")[0]!.split("/").filter(Boolean).pop() ?? "",
+              detail: model ? model[1]! : rt ? rt[1]! : "",
+              ms: Date.now() - t0,
+              status: res.statusCode ?? 0,
+            });
+          });
+        });
+      }
+    } catch {
+      /* logging must never break a request */
+    }
+    return req;
+  } as typeof https.request;
+}
+
+// Bedrock's SDK also speaks HTTP/2, and some calls go through fetch: log those the same way
+{
+  const push = (host: string, path: string, t0: number, status: number) => {
+    const model = /\/model\/([^/]+)\/([\w-]+)/.exec(path);
+    const rt = /runtimes\/arn:aws:bedrock-agentcore:[^/]*:\d+:runtime\/([^/]+)\/invocations/.exec(path);
+    awsCalls.push({
+      t: t0 / 1000,
+      service: host.split(".")[0]!,
+      op: model ? model[2]!.split("-").map((w) => w[0]!.toUpperCase() + w.slice(1)).join("") : rt ? "InvokeAgentRuntime" : path.split("?")[0]!.split("/").filter(Boolean).pop() ?? "",
+      detail: model ? model[1]! : rt ? rt[1]! : "",
+      ms: Date.now() - t0,
+      status,
+    });
+  };
+  const http2 = require("node:http2") as typeof import("node:http2");
+  const origConnect = http2.connect;
+  (http2 as unknown as { connect: unknown }).connect = function (this: unknown, authority: unknown, ...rest: unknown[]) {
+    const session = (origConnect as (...x: unknown[]) => import("node:http2").ClientHttp2Session).apply(this, [authority, ...rest]);
+    try {
+      const host = new URL(String(authority)).hostname;
+      if (host.endsWith(".amazonaws.com")) {
+        const origReq = session.request.bind(session);
+        (session as unknown as { request: unknown }).request = (headers: Record<string, string>, ...r: unknown[]) => {
+          const t0 = Date.now();
+          const stream = (origReq as (...x: unknown[]) => import("node:http2").ClientHttp2Stream)(headers, ...r);
+          let status = 0;
+          stream.on("response", (h) => (status = Number(h[":status"] ?? 0)));
+          stream.on("close", () => push(host, decodeURIComponent(String(headers[":path"] ?? "")), t0, status));
+          return stream;
+        };
+      }
+    } catch {
+      /* logging must never break a request */
+    }
+    return session;
+  } as typeof http2.connect;
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const u = (() => { try { return new URL(typeof input === "string" || input instanceof URL ? String(input) : input.url); } catch { return undefined; } })();
+    const t0 = Date.now();
+    const res = await origFetch(input, init);
+    if (u && u.hostname.endsWith(".amazonaws.com")) push(u.hostname, decodeURIComponent(u.pathname), t0, res.status);
+    return res;
+  }) as typeof fetch;
+}
+
+// the SDK binds https.request when it loads, so it has to load after the wrapper is in place
+(require("node:module") as typeof import("node:module")).syncBuiltinESMExports();
+const { rulesOnlyChecker } = await import("@stoop/agents");
+const { createSandboxServer } = await import("../src/sandboxes.ts");
 
 // ---------------------------------------------------------------- the server: the real hosted app
 const server = await createSandboxServer({
@@ -51,6 +138,7 @@ const browsers = { laptop: await launch(1.5), phone: await launch(2) };
 
 // ---------------------------------------------------------------- recording
 const marks: Array<{ who: string; label: string; t: number }> = [];
+const taps: Array<{ who: string; t: number }> = []; // every click, for the editor's sound design
 const mark = (who: string, label: string) => {
   marks.push({ who, label, t: Date.now() / 1000 });
   console.log(`  [${who}] ${label}`);
@@ -71,6 +159,7 @@ const CURSOR = (arrow: boolean) => `(() => {
     d.style.cssText = "position:fixed;z-index:2147483646;pointer-events:none;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;border:4px solid #ffc83d;background:rgba(255,200,61,.28);left:" + e.clientX + "px;top:" + e.clientY + "px";
     document.documentElement.appendChild(d);
     d.animate([{ transform: "scale(.4)", opacity: 1 }, { transform: "scale(1.7)", opacity: 0 }], { duration: 650, easing: "ease-out" }).onfinish = () => d.remove();
+    if (window.__tap) window.__tap();
   }, true);
 })();`;
 
@@ -83,6 +172,7 @@ async function open(name: string, kind: "laptop" | "phone") {
       ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: "light", permissions: ["clipboard-read", "clipboard-write"] }
       : { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1.5, colorScheme: "light", permissions: ["clipboard-read", "clipboard-write"] },
   );
+  await ctx.exposeFunction("__tap", () => taps.push({ who: name, t: Date.now() / 1000 }));
   await ctx.addInitScript(CURSOR(!phone));
   const page = await ctx.newPage();
   page.on("pageerror", (e) => console.error(`[${name} pageerror] ${e.message}`));
@@ -380,6 +470,8 @@ try {
   for (const r of recs) await r.stop();
   await new Promise((r) => setTimeout(r, 600));
   writeFileSync(join(OUT, "marks.json"), JSON.stringify({ marks, result }, null, 2));
+  writeFileSync(join(OUT, "aws-calls.json"), JSON.stringify(awsCalls, null, 1));
+  writeFileSync(join(OUT, "taps.json"), JSON.stringify(taps, null, 1));
   for (const r of recs) encode(r);
   await browsers.laptop.close();
   await browsers.phone.close();
