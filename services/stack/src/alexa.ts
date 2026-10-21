@@ -355,10 +355,8 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
     return s && steps.includes(s.step) ? s : undefined;
   };
   const art = (name: string) => (/^[aeiou]/i.test(name) ? "an" : "a");
-  // "Porch Bench" is title case from the model, not a brand: say it in lower case
-  const spoken = (title: string) => (/^[A-Z][a-z]+(?: [A-Z][a-z]+)*$/.test(title) ? title.toLowerCase() : inSentence(title));
   const estimate = (q: Quote) => {
-    const name = spoken(q.title);
+    const name = inSentence(q.title);
     if (q.priceSource === "none") return `I don’t have prices for ${art(name)} ${name} yet.`;
     if (q.priceSource === "ai-estimate") return `I’d estimate ${art(name)} ${name} like yours sells for about ${$(q.listMinor)} secondhand. That’s an AI estimate.`;
     const lead = art(name);
