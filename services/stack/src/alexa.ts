@@ -355,8 +355,10 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
     return s && steps.includes(s.step) ? s : undefined;
   };
   const art = (name: string) => (/^[aeiou]/i.test(name) ? "an" : "a");
+  // "Porch Bench" is title case from the model, not a brand: say it in lower case
+  const spoken = (title: string) => (/^[A-Z][a-z]+(?: [A-Z][a-z]+)*$/.test(title) ? title.toLowerCase() : inSentence(title));
   const estimate = (q: Quote) => {
-    const name = inSentence(q.title);
+    const name = spoken(q.title);
     if (q.priceSource === "none") return `I don’t have prices for ${art(name)} ${name} yet.`;
     if (q.priceSource === "ai-estimate") return `I’d estimate ${art(name)} ${name} like yours sells for about ${$(q.listMinor)} secondhand. That’s an AI estimate.`;
     const lead = art(name);
@@ -373,7 +375,7 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
     price: "What price should I list it at?",
     floor: "What’s the lowest price you’d take?",
     name: "What’s your first name?",
-    address: "Tell me your street address and ZIP code, or allow your address in the Alexa app and say continue.",
+    address: "Say: my address is, then your street and ZIP code. Or allow your address in the Alexa app and say continue.",
     zip: "What’s your ZIP code?",
     confirm_address: "Is that address right?",
     approve_list: ASK_YES,
@@ -524,7 +526,7 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
     },
     { canHandle: (h) => intent(h, "ContinueIntent") && !!sellAt(h, "address"), handle: (h) => askAddress(h, attrs(h).sell!, "") },
     {
-      canHandle: (h) => intent(h, "AddressIntent") && !!sellAt(h, "address", "name", "confirm_address"),
+      canHandle: (h) => intent(h, "AddressIntent", "StreetAddressIntent") && !!sellAt(h, "address", "name", "confirm_address"),
       handle: (h) => {
         const s = attrs(h).sell!;
         if (s.step === "name") return speak(h, NEXT.name, true);
@@ -540,6 +542,11 @@ export function createStoopSkill(o: { skillId?: string; links: AlexaLinks; shop(
         s.step = "confirm_address";
         return speak(h, `I heard ${s.address}, ZIP ${zipSaid(zip)}. Is that right?`, true, NEXT.confirm_address);
       },
+    },
+    {
+      // while Alexa waits for an address, an address heard as another intent ("12 Elm Street... 62704" as a price) is asked again, never acted on
+      canHandle: (h) => intent(h, "MandateIntent", "PriceIntent", "ListIntent", "CommandIntent", "FindIntent", "AMAZON.FallbackIntent") && !!sellAt(h, "address"),
+      handle: (h) => speak(h, `I didn’t catch your address. ${NEXT.address}`, true, NEXT.address),
     },
     {
       canHandle: (h) => intent(h, "AMAZON.YesIntent") && !!sellAt(h, "confirm_address"),

@@ -352,11 +352,25 @@
             }
           ],
           "samples": [
+            "{address}"
+          ]
+        },
+        {
+          "name": "StreetAddressIntent",
+          "slots": [
+            {
+              "name": "address",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
             "my address is {address}",
             "I live at {address}",
             "the address is {address}",
             "it's at {address}",
-            "{address}"
+            "my street address is {address}",
+            "my home address is {address}",
+            "our address is {address}"
           ]
         },
         {
