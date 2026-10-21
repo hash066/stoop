@@ -119,6 +119,9 @@ describe("real two-device flow with a porch camera (no demo data)", () => {
       expect((await http(stack, "POST", `/pass/${passId}/lock`, phone.register(lockOpts), dev)).json).toMatchObject({ locked: true });
       expect((await http(stack, "GET", `/pass/${passId}`, undefined, dev)).json).toMatchObject({ passkey: true, locked: false, address: "12 Elm St, Springfield, IL" });
       skew = 11 * 60_000; // the unlock lasts ten minutes
+      // the camera page polls all through those minutes; without this the camera looks 11 minutes silent (offline)
+      // whenever the jump lands between two polls of camLoop
+      await http(stack, "GET", "/web/cam/next", undefined, camAuth);
       const locked = (await http(stack, "GET", `/pass/${passId}`, undefined, dev)).json;
       expect(locked).toMatchObject({ passkey: true, locked: true });
       expect(locked.address).toBeUndefined();
