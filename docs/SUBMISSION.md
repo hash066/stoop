@@ -7,7 +7,7 @@
 > - [x] Tester site (the web app, Amazon Bedrock): https://d29kyjvj1jibpu.cloudfront.net. Judge site (the same plus the Alexa+ device tour at /demo): https://d2h8mmod981k0j.cloudfront.net
 > - [x] `proof-of-handoff` 0.1.0 on npm: https://www.npmjs.com/package/proof-of-handoff
 > - [x] Alexa skill "stoop shop" deployed (development stage) and checked through Amazon's Alexa simulator against the live site; judges need beta-test invites to use it on their own Echo
-> - [ ] TODO: links for the two market figures below (OfferUp report; MPB survey), or drop them
+> - [x] Market figures: OfferUp 2025 Recommerce Report linked; the MPB "hassle" line dropped (MPB's survey names low expected payout as the top barrier, not hassle)
 > - [ ] TODO: real porch footage; a real Ring snapshot needs a physical Ring device (the Playground's virtual device has no recordings)
 
 **Tracks:** Alexa+ (primary), Ring. **Minis:** AWS Builder, Open Source.
@@ -32,7 +32,8 @@ AI agents already sell for people. In late September 2026 a Big Tech shopping ag
 - **A receipt anyone can verify.** Each outcome is a signed JWS (ES256 over RFC 8785 canonical JSON): `npx proof-of-handoff verify` ([on npm](https://www.npmjs.com/package/proof-of-handoff)).
 - **No Ring? Use an old phone.** The web app turns any phone or laptop into the porch camera: it sends the before and after photos, and during a pickup its motion detector asks Bedrock vision whether someone is at the door (counted, never identified).
 - **Stoop Street.** Every shop in one marketplace, nearest first, with reviews that can only come from a finished pickup and link to its signed receipt. Buyers can send an agent ("a jogging stroller under $100 near 62704") that haggles with sellers' agents inside the budget; it can agree a price, only the buyer can pay.
-- **On a real Alexa today.** A custom skill ("Alexa, ask stoop shop if I have any offers" / "find a stroller under a hundred dollars") runs the same tools: the seller approves the exact terms by voice, the buyer pays with their purchase code over $100.
+- **On a real Alexa today, start to finish.** A custom skill runs the same tools. A seller sells by voice: "what's my porch bench worth?" gets an AI estimate, then a price, a private lowest price, a shop at the address from their Alexa settings (with permission) and, after "it's out", a listing photo from the porch camera. "Do I have any offers?" lets them approve the exact terms by voice. A buyer can "find a stroller under a hundred dollars" and pays with a purchase code over $100.
+- **Locked down at the door.** A camera pairs once, with a one-time code that lasts 10 minutes. A lockbox code is encrypted like the address and shown only on the bound pass, inside the window, after "I'm here". Buyers can lock their pass with a passkey (face or fingerprint on that phone; Stoop keeps only the public key).
 
 ## How we built it
 
@@ -103,8 +104,7 @@ From `docs/FRICTION_LOG.md` (24 entries), for example:
 
 ## Market context (cite or cut)
 
-- US recommerce ≈ $229B in 2025: OfferUp report (industry-sponsored). TODO: link.
-- The top reason people don't sell is "not worth the hassle": MPB survey (vendor). TODO: link.
+- US recommerce is projected at $228.6B in 2025 (up 10.2% from $207.8B in 2024), and 54% of US adults sold a secondhand item in the past year: OfferUp 2025 Recommerce Report with GlobalData (industry-sponsored; survey of 1,500 adults by Pollfish, June 2025), as reported by [Gifts & Decorative Accessories, Sept 26 2025](https://www.giftsanddec.com/industry-insights/booming-recommerce-market-shows-why-secondhand-has-become-first-choice-for-many) and [The Ethos](https://the-ethos.co/93-of-americans-bought-secondhand-last-year-offerup-report/).
 
 ## Built with
 
